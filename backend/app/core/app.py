@@ -1,6 +1,6 @@
 from app.api import admin, health
 from app.core.settings import settings
-from app.services.admin_service import APIMetricsMiddleware
+from app.utils.metrics import APIMetricsMiddleware
 from fastapi import FastAPI
 
 

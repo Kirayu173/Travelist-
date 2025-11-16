@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     jwt_alg: str = "HS256"
     jwt_expire_min: int = 60
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 @lru_cache

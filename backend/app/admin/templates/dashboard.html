@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>Travelist+ 管理面板</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #111;
+        background: #f5f7fb;
+      }
+
+      body {
+        margin: 0;
+        padding: 0 24px 48px;
+      }
+
+      header {
+        padding: 24px 0 8px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+
+      .meta {
+        color: #666;
+        margin-top: 4px;
+        font-size: 14px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 18px;
+        margin-top: 24px;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e4e7ef;
+        padding: 18px;
+        box-shadow: 0 6px 16px rgba(15, 27, 63, 0.04);
+      }
+
+      .card h2 {
+        margin-top: 0;
+        font-size: 20px;
+        color: #26335d;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+
+      th,
+      td {
+        padding: 8px;
+        border-bottom: 1px solid #eff2f7;
+        text-align: left;
+      }
+
+      th {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #6e7793;
+      }
+
+      td {
+        font-size: 14px;
+      }
+
+      .label {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .label.ok {
+        background: #edf7f0;
+        color: #1f9254;
+      }
+
+      .label.fail {
+        background: #fdeaea;
+        color: #c0392b;
+      }
+
+      .label.unknown {
+        background: #fef4e5;
+        color: #9a5d00;
+      }
+
+      .api-test-area {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .api-test-area input,
+      .api-test-area select,
+      .api-test-area textarea {
+        font-size: 14px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #cfd7ea;
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      button {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        background: #3867ff;
+        color: #fff;
+      }
+
+      pre {
+        background: #161b28;
+        color: #daf0ff;
+        padding: 12px;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+
+      .result-panel {
+        background: #f3f5ff;
+        border-radius: 8px;
+        padding: 10px;
+        border: 1px solid #dfe4ff;
+        min-height: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>{{ basic_info.app_name }} 管理面板</h1>
+      <div class="meta">
+        版本 {{ basic_info.version }} · 环境 {{ basic_info.env }} · 启动时间 {{ basic_info.start_time.isoformat()
+        }} · 当前时间 {{ current_time.isoformat() }}
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>API 调用概览</h2>
+        <p>累计请求：<strong id="totalRequests">{{ api_summary.total_requests }}</strong></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Path</th>
+              <th>Count</th>
+              <th>Avg (ms)</th>
+              <th>P95 (ms)</th>
+            </tr>
+          </thead>
+          <tbody id="routesTable"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>依赖健康状态</h2>
+        <div>
+          <p>应用：<span class="label ok">OK</span></p>
+          <p>
+            数据库：
+            <span class="label {{ health.db.status }}">{{ health.db.status|upper }}</span>
+            {% if health.db.error %}<br /><small>{{ health.db.error }}</small>{% endif %}
+          </p>
+          <p>
+            Redis：
+            <span class="label {{ health.redis.status }}">{{ health.redis.status|upper }}</span>
+            {% if health.redis.error %}<br /><small>{{ health.redis.error }}</small>{% endif %}
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid" style="margin-top: 24px">
+      <section class="card">
+        <h2>API 在线测试</h2>
+        <h3>接口列表</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>方法</th>
+              <th>路径</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="testCasesTable"></tbody>
+        </table>
+        <h3>手动请求</h3>
+        <div class="api-test-area">
+          <label>
+            请求方法
+            <select id="testMethod">
+              <option>GET</option>
+              <option>POST</option>
+              <option>PUT</option>
+              <option>PATCH</option>
+              <option>DELETE</option>
+              <option>HEAD</option>
+            </select>
+          </label>
+          <label>
+            路径
+            <input id="testPath" placeholder="/healthz" value="/healthz" />
+          </label>
+          <label>
+            JSON Body
+            <textarea id="testBody" placeholder='{"key":"value"}'></textarea>
+          </label>
+          <button onclick="runManualApiTest()">执行手动测试</button>
+          <div id="apiTestResult" class="result-panel"></div>
+        </div>
+        <h3>测试结果</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>来源</th>
+              <th>方法</th>
+              <th>路径</th>
+              <th>状态码</th>
+              <th>耗时(ms)</th>
+              <th>摘要</th>
+            </tr>
+          </thead>
+          <tbody id="apiResultTable"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>数据检查（Data Checks）</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>状态</th>
+              <th>等级</th>
+              <th>详情</th>
+            </tr>
+          </thead>
+          <tbody id="checkTable"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <script>
+      const summaryData = {{ api_summary | tojson }};
+      const initialChecks = {{ checks | tojson }};
+      const testCases = {{ predefined_tests | tojson }};
+      const apiResults = [];
+
+      function renderRoutes(data) {
+        const table = document.getElementById("routesTable");
+        table.innerHTML =
+          data
+            .map(
+              (r) =>
+                `<tr>
+                  <td>${r.method}</td>
+                  <td>${r.path}</td>
+                  <td>${r.count}</td>
+                  <td>${r.avg_ms}</td>
+                  <td>${r.p95_ms ?? "-"}</td>
+                </tr>`
+            )
+            .join("") || `<tr><td colspan="5">暂无数据</td></tr>`;
+      }
+
+      function renderChecks(checks) {
+        const table = document.getElementById("checkTable");
+        table.innerHTML =
+          checks
+            .map(
+              (item) =>
+                `<tr>
+                  <td>${item.name}</td>
+                  <td><span class="label ${item.status}">${item.status.toUpperCase()}</span></td>
+                  <td>${item.level}</td>
+                  <td>${item.detail}</td>
+                </tr>`
+            )
+            .join("") || `<tr><td colspan="4">暂无检查数据</td></tr>`;
+      }
+
+      function renderTestCases(cases) {
+        const table = document.getElementById("testCasesTable");
+        table.innerHTML =
+          cases
+            .map(
+              (c, index) =>
+                `<tr>
+                  <td>${c.name}</td>
+                  <td>${c.method}</td>
+                  <td>${c.path}</td>
+                  <td>
+                    <button type="button" onclick="runPresetTest(${index})">运行</button>
+                  </td>
+                </tr>`
+            )
+            .join("") || `<tr><td colspan="4">暂无预设用例</td></tr>`;
+      }
+
+      async function refreshChecks() {
+        try {
+          const resp = await fetch("/admin/checks");
+          const body = await resp.json();
+          if (body?.data) {
+            renderChecks(body.data);
+          }
+        } catch (err) {
+          console.error("refresh checks failed", err);
+        }
+      }
+
+      async function refreshSummary() {
+        try {
+          const resp = await fetch("/admin/api/summary?window=300");
+          const body = await resp.json();
+          if (body?.data) {
+            document.getElementById("totalRequests").innerText = body.data.total_requests;
+            renderRoutes(body.data.routes || []);
+          }
+        } catch (err) {
+          console.error("refresh summary failed", err);
+        }
+      }
+
+      function renderApiResults() {
+        const tbody = document.getElementById("apiResultTable");
+        tbody.innerHTML =
+          apiResults
+            .map(
+              (item) =>
+                `<tr>
+                  <td>${item.source}</td>
+                  <td>${item.method}</td>
+                  <td>${item.path}</td>
+                  <td>${item.status}</td>
+                  <td>${item.duration}</td>
+                  <td><pre style="margin:0;white-space:pre-wrap">${escapeHtml(item.excerpt)}</pre></td>
+                </tr>`
+            )
+            .join("") || `<tr><td colspan="6">暂无测试记录</td></tr>`;
+      }
+
+      function logApiResult(entry) {
+        apiResults.unshift(entry);
+        if (apiResults.length > 10) {
+          apiResults.pop();
+        }
+        renderApiResults();
+      }
+
+      function escapeHtml(value) {
+        if (!value) return "";
+        return value.replace(/[&<>"']/g, (ch) => {
+          const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+          return map[ch] || ch;
+        });
+      }
+
+      async function runPresetTest(index) {
+        const testCase = testCases[index];
+        if (!testCase) return;
+        await executeApiTest(`预设-${testCase.name}`, {
+          method: testCase.method,
+          path: testCase.path,
+        });
+      }
+
+      async function runManualApiTest() {
+        const method = document.getElementById("testMethod").value;
+        const path = document.getElementById("testPath").value;
+        const bodyText = document.getElementById("testBody").value.trim();
+        let json = null;
+        if (bodyText) {
+          try {
+            json = JSON.parse(bodyText);
+          } catch (err) {
+            alert("JSON Body 格式错误");
+            return;
+          }
+        }
+        await executeApiTest(`手动-${method} ${path}`, {
+          method,
+          path,
+          json_body: json,
+        });
+      }
+
+      async function executeApiTest(source, payload) {
+        const container = document.getElementById("apiTestResult");
+        try {
+          const resp = await fetch("/admin/api/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const payloadBody = await resp.json();
+          const result = payloadBody.data;
+          if (!resp.ok || !result) {
+            const message = payloadBody?.msg || "请求失败";
+            container.innerHTML = `<p class="label fail">${message}</p>`;
+            logApiResult({
+              source,
+              method: payload.method,
+              path: payload.path,
+              status: message,
+              duration: "-",
+              excerpt: message,
+            });
+            return;
+          }
+          container.innerHTML = `
+            <p>状态码：${result.status_code ?? "N/A"} · 耗时 ${result.duration_ms} ms</p>
+            ${result.error ? `<p class="label fail">${result.error}</p>` : ""}
+            <pre>${escapeHtml(result.response_body_excerpt || "（无响应体）")}</pre>
+          `;
+          logApiResult({
+            source,
+            method: payload.method,
+            path: payload.path,
+            status: result.status_code ?? "N/A",
+            duration: result.duration_ms ?? "-",
+            excerpt: result.response_body_excerpt || result.error || "",
+          });
+        } catch (err) {
+          const message = typeof err?.message === "string" ? err.message : "请求异常";
+          container.innerHTML = `<p class="label fail">${message}</p>`;
+          logApiResult({
+            source,
+            method: payload.method,
+            path: payload.path,
+            status: "error",
+            duration: "-",
+            excerpt: message,
+          });
+        }
+      }
+
+      renderRoutes(summaryData.routes || []);
+      renderChecks(initialChecks);
+      renderTestCases(testCases);
+      renderApiResults();
+      refreshChecks();
+      refreshSummary();
+      setInterval(refreshSummary, 30000);
+      setInterval(refreshChecks, 60000);
+    </script>
+  </body>
+</html>
