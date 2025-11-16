@@ -16,7 +16,7 @@
 - `backend/tests/test_admin.py`：新增 8 个用例覆盖 Dashboard、Summary window、API Test、Data Checks、DB/Redis 状态等核心路径。
 - `_docs/Phase1/Code.md`：记录本阶段实现、问题、测试结果。
 
-## 3. 技术选型与实现要点
+## 3. 技术实现要点
 1. **MetricsRegistry**
    - 使用 `RouteStats`（count/avg/last_ms/p95）+ `RequestEvent`（用于窗口统计），以 `Lock` 保证线程安全。
    - 中间件在 `dispatch` 中记录 method/path/duration/status，可提供 `snapshot()` 与 `snapshot_window(window_seconds)`。
@@ -46,12 +46,9 @@
    - 采用 `asyncio.gather` 并统一 1s 超时，同时在响应中返回 `error` 详情，既满足 Spec 的“真实探测”又避免长时间阻塞。
 
 ## 5. 测试与验证
-- **依赖安装**：`python -m pip install -r requirements.txt`（新增 SQLAlchemy）。
-- **单元/集成测试**：`$env:PYTHONPATH='backend'; pytest`，共 8 个测试全部通过，覆盖 Dashboard、Summary Window、API Test、Checks、Health 等路径。
-- **手动验证**：
-  1. 启动 `uvicorn backend.app.main:app`，浏览器访问 `/admin/dashboard` 可查看基础信息、API 统计与 Data Check 区域。
-  2. 使用页面预设用例运行 `/healthz`，能够展示状态码、耗时与响应体摘录。
-  3. 关闭/未启动 DB 或 Redis 时，`/admin/health` 与 `/admin/checks` 会将状态变更为 `fail/unknown` 并展示错误信息。
+- 依赖安装：`python -m pip install -r requirements.txt`（新增 SQLAlchemy）。
+- 单元/集成测试：`$env:PYTHONPATH='backend'; pytest`，共 8 个测试全部通过，覆盖 Dashboard、Summary Window、API Test、Checks、Health 等路径。
+- 手动验证：启动 `uvicorn backend.app.main:app`，浏览器访问 `/admin/dashboard` 可查看基础信息、API 统计与 Data Check 区域；使用页面预设用例运行 `/healthz`，能够展示状态码、耗时与响应体摘录；关闭/未启动 DB 或 Redis 时，`/admin/health` 与 `/admin/checks` 会将状态变更为 `fail/unknown` 并展示错误信息。
 
 ## 6. 后续建议
 1. 在 `MetricsRegistry` 中引入更精细的时间窗口（环形缓冲或滑动桶），以降低事件列表增长。

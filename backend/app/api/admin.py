@@ -80,10 +80,32 @@ async def admin_health(
     return success_response(health)
 
 
+@router.get("/db/health")
+async def admin_db_health(
+    admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
+) -> dict:
+    """Expose real database connectivity information."""
+
+    status = await admin_service.get_db_health()
+    return success_response(status)
+
+
+@router.get("/db/stats")
+async def admin_db_stats(
+    admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
+) -> dict:
+    """Return row-count statistics for core tables."""
+
+    stats = await admin_service.get_db_stats()
+    return success_response(stats)
+
+
 @router.get("/db/status")
 async def admin_db_status(
     admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
 ) -> dict:
+    """Deprecated alias kept for backward compatibility."""
+
     status = await admin_service.get_db_status()
     return success_response(status)
 

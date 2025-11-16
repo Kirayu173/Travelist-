@@ -9,14 +9,14 @@ services:
       - .env
     environment:
       # Overwrite to use container network hostnames for services
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       DEBUG: ${DEBUG:-false}
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
       - ./backend:/app/backend
-    command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/backend"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -25,7 +25,7 @@ services:
     networks:
       - travelist_net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/readyz > /dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz > /dev/null"]
       interval: 10s
       timeout: 5s
       retries: 12

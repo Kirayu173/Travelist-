@@ -6,6 +6,8 @@ psycopg>=3.2.0
 psycopg-binary>=3.2.0
 redis>=5.0.0
 sqlalchemy>=2.0.0
+geoalchemy2>=0.14.2
+alembic>=1.13.0
 starlette>=0.37.0
 
 # development dependencies

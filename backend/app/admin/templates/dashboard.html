@@ -144,6 +144,16 @@
         border: 1px solid #dfe4ff;
         min-height: 40px;
       }
+
+      .muted {
+        color: #6e7793;
+        font-size: 13px;
+      }
+
+      .error-text {
+        color: #c0392b;
+        font-size: 13px;
+      }
     </style>
   </head>
   <body>
@@ -179,8 +189,11 @@
           <p>应用：<span class="label ok">OK</span></p>
           <p>
             数据库：
-            <span class="label {{ health.db.status }}">{{ health.db.status|upper }}</span>
-            {% if health.db.error %}<br /><small>{{ health.db.error }}</small>{% endif %}
+            <span class="label {{ db_health.status }}">{{ db_health.status|upper }}</span>
+            <br />
+            <small>延迟：{{ db_health.latency_ms or "-" }} ms</small><br />
+            <small>DSN：{{ db_health.engine_url }}</small>
+            {% if db_health.error %}<br /><small class="error-text">{{ db_health.error }}</small>{% endif %}
           </p>
           <p>
             Redis：
@@ -188,6 +201,43 @@
             {% if health.redis.error %}<br /><small>{{ health.redis.error }}</small>{% endif %}
           </p>
         </div>
+      </section>
+
+      <section class="card">
+        <h2>数据库表统计</h2>
+        {% if db_stats.error %}
+        <p class="error-text">无法获取行数：{{ db_stats.error }}</p>
+        {% endif %}
+        <table>
+          <thead>
+            <tr>
+              <th>表名</th>
+              <th>行数</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if db_stats.tables %}
+              {% for name, info in db_stats.tables|dictsort %}
+              <tr>
+                <td>{{ name }}</td>
+                <td>{{ info.row_count if info.row_count is not none else "未知" }}</td>
+                <td>
+                  {% if info.error %}
+                    <span class="error-text">{{ info.error }}</span>
+                  {% elif info.row_count == 0 %}
+                    <span class="muted">当前暂无数据</span>
+                  {% else %}
+                    <span class="muted">约 {{ info.row_count }} 条</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="3">尚未取得统计数据</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
       </section>
     </div>
 

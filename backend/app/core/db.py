@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from time import monotonic, perf_counter
-from typing import Any
+from typing import Any, Generator
 
 from anyio import to_thread
 from app.core.settings import settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session, sessionmaker
 
 _engine: Engine | None = None
+_session_factory: sessionmaker[Session] | None = None
 _cached_db_status: dict[str, Any] | None = None
 _cached_db_ts: float | None = None
 HEALTH_CACHE_SECONDS = 5.0
@@ -30,11 +33,47 @@ def get_engine() -> Engine:
     return _engine
 
 
+def _get_session_factory() -> sessionmaker[Session]:
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = sessionmaker(
+            bind=get_engine(),
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
+            future=True,
+        )
+    return _session_factory
+
+
+def get_session() -> Session:
+    """Return a new SQLAlchemy session bound to the shared engine."""
+
+    factory = _get_session_factory()
+    return factory()
+
+
+@contextmanager
+def session_scope() -> Generator[Session, None, None]:
+    """Provide transactional scope for DB interactions."""
+
+    session = get_session()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def dispose_engine() -> None:
-    global _engine
+    global _engine, _session_factory
     if _engine is not None:
         _engine.dispose()
         _engine = None
+    _session_factory = None
     invalidate_db_health_cache()
 
 
