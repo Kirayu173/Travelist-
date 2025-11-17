@@ -1,6 +1,10 @@
-from sqlalchemy.engine.url import make_url
+import uuid
+from datetime import date
 
+from app.core.db import session_scope
 from app.core.settings import settings
+from app.models.orm import DayCard, SubTrip, Trip, User
+from sqlalchemy.engine.url import make_url
 
 
 def test_admin_ping_returns_version_and_time(client):
@@ -34,17 +38,16 @@ def test_admin_api_testcases_returns_presets(client):
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert len(data) >= 2
-    assert any(case["path"] == "/healthz" for case in data)
+    assert any(case["path"] == "/api/trips" for case in data)
 
 
-def test_admin_api_test_executes_healthz(client):
-    payload = {"method": "GET", "path": "/healthz"}
+def test_admin_api_test_executes_sample_call(client):
+    payload = {"method": "GET", "path": "/api/trips", "query": {"user_id": 1}}
     resp = client.post("/admin/api/test", json=payload)
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["status_code"] == 200
     assert data["ok"] is True
-    assert '"status":"ok"' in data["response_body_excerpt"]
 
 
 def test_admin_checks_endpoint_returns_three_items(client):
@@ -89,3 +92,73 @@ def test_admin_db_stats_endpoint_reports_core_tables(client):
     for table in ["users", "trips", "day_cards", "sub_trips", "pois", "favorites"]:
         assert table in tables
         assert "row_count" in tables[table]
+
+
+def _seed_trip_graph() -> None:
+    with session_scope() as session:
+        user = User(
+            email=f"admin_summary_{uuid.uuid4().hex}@example.com",
+            name="Admin Summary User",
+        )
+        session.add(user)
+        session.flush()
+        trip = Trip(user_id=user.id, title="Admin Summary Trip", destination="测试城市")
+        session.add(trip)
+        session.flush()
+        day_card = DayCard(trip_id=trip.id, day_index=0, date=date.today())
+        session.add(day_card)
+        session.flush()
+        session.add(
+            SubTrip(
+                day_card_id=day_card.id,
+                order_index=0,
+                activity="Admin Summary Activity",
+            )
+        )
+
+
+def test_admin_trip_summary_endpoint_returns_counts(client):
+    _seed_trip_graph()
+    resp = client.get("/admin/trips/summary")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["total_trips"] >= 1
+    assert data["total_day_cards"] >= 1
+    assert isinstance(data["recent_trips"], list)
+
+
+def test_admin_api_routes_only_includes_api_paths(client):
+    resp = client.get("/admin/api/routes")
+    assert resp.status_code == 200
+    routes = resp.json()["data"]["routes"]
+    assert routes, "should expose api routes"
+    assert all(route["path"].startswith("/api/") for route in routes)
+
+
+def test_admin_api_schemas_endpoint_returns_payload(client):
+    resp = client.get("/admin/api/schemas")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert "schemas" in data
+
+
+def test_admin_db_schema_endpoint_returns_tables(client):
+    resp = client.get("/admin/db/schema")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert "tables" in data
+    assert "trips" in data["tables"]
+
+
+def test_admin_api_docs_page_serves_html(client):
+    resp = client.get("/admin/api-docs")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "API 文档与在线测试" in resp.text
+
+
+def test_admin_db_schema_page_serves_html(client):
+    resp = client.get("/admin/db/schema?view=1")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "数据库结构视图" in resp.text

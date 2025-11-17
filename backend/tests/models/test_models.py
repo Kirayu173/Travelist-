@@ -18,12 +18,14 @@ def test_orm_can_persist_full_trip_graph() -> None:
         trip = Trip(title="Stage 2 Trip", destination="Shanghai", user=user)
         day_card = DayCard(day_index=0, note="抵达", trip=trip)
         poi = Poi(provider="manual", provider_id="poi-1", name="陆家嘴")
-        sub_trip = SubTrip(
-            activity="参观陆家嘴",
-            order_index=0,
-            poi=poi,
-            day_card=day_card,
-            transport=TransportMode.WALK,
+        session.add(
+            SubTrip(
+                activity="参观陆家嘴",
+                order_index=0,
+                poi=poi,
+                day_card=day_card,
+                transport=TransportMode.WALK,
+            )
         )
         favorite = Favorite(user=user, poi=poi)
 

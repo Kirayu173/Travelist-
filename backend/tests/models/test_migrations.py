@@ -5,12 +5,15 @@ from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect
-from sqlalchemy.engine.url import make_url
-
 from app.core.db import dispose_engine, get_engine
 from app.core.settings import settings
-from backend.tests.utils.db import clone_url_with_database, drop_database, ensure_database
+from backend.tests.utils.db import (
+    clone_url_with_database,
+    drop_database,
+    ensure_database,
+)
+from sqlalchemy import inspect
+from sqlalchemy.engine.url import make_url
 
 
 def test_alembic_upgrade_and_downgrade() -> None:

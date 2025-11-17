@@ -28,22 +28,31 @@ APP_START_TIME = datetime.now(timezone.utc)
 
 PREDEFINED_TESTS: Sequence[ApiTestCase] = [
     ApiTestCase(
-        name="healthz",
+        name="trip_list",
         method="GET",
-        path="/healthz",
-        description="基础健康检查",
+        path="/api/trips",
+        description="行程列表（user_id=1）",
+        query={"user_id": 1},
     ),
     ApiTestCase(
-        name="admin_ping",
+        name="trip_detail",
         method="GET",
-        path="/admin/ping",
-        description="Admin Ping",
+        path="/api/trips/{trip_id}",
+        description="行程详情（示例 ID）",
+        path_params={"trip_id": 1},
     ),
     ApiTestCase(
-        name="admin_api_summary",
-        method="GET",
-        path="/admin/api/summary",
-        description="API 统计摘要",
+        name="create_trip",
+        method="POST",
+        path="/api/trips",
+        description="创建示例行程（需存在 user_id=1）",
+        json_body={
+            "user_id": 1,
+            "title": "示例行程",
+            "destination": "测试城市",
+            "status": "draft",
+            "day_cards": [],
+        },
     ),
 ]
 
@@ -95,10 +104,11 @@ class AdminService:
     async def get_dashboard_context(self) -> dict[str, Any]:
         basic_info = self.get_basic_info()
         current_time = datetime.now(timezone.utc)
-        health, data_checks, db_stats = await asyncio.gather(
+        health, data_checks, db_stats, trip_summary = await asyncio.gather(
             self.get_health_summary(),
             self.list_data_checks(),
             self.get_db_stats(),
+            self.get_trip_summary(),
         )
         api_summary = await self.get_api_summary()
         db_health = health.get("db") or {
@@ -114,6 +124,7 @@ class AdminService:
             "db_health": db_health,
             "db_stats": db_stats,
             "api_summary": api_summary,
+            "trip_summary": trip_summary,
             "checks": [check.model_dump(mode="json") for check in data_checks],
             "predefined_tests": [
                 case.model_dump(mode="json") for case in self.get_predefined_testcases()
@@ -127,6 +138,66 @@ class AdminService:
         if window_seconds:
             return self._metrics_registry.snapshot_window(window_seconds)
         return self._metrics_registry.snapshot()
+
+    def get_api_routes(self, app: FastAPI) -> list[dict[str, Any]]:
+        schema = app.openapi()
+        paths: dict[str, Any] = schema.get("paths", {})
+        routes: list[dict[str, Any]] = []
+        for path, operations in paths.items():
+            if not path.startswith("/api/"):
+                continue
+            for method, spec in operations.items():
+                method_upper = method.upper()
+                if method_upper not in {"GET", "POST", "PUT", "DELETE", "PATCH"}:
+                    continue
+                request_schema = self._extract_schema_name(
+                    spec.get("requestBody", {})
+                    .get("content", {})
+                    .get("application/json", {})
+                    .get("schema")
+                )
+                responses = spec.get("responses", {})
+                response_schema = None
+                for status_code in ("200", "201", "202"):
+                    block = responses.get(status_code)
+                    if not block:
+                        continue
+                    response_schema = self._extract_schema_name(
+                        block.get("content", {})
+                        .get("application/json", {})
+                        .get("schema")
+                    )
+                    if response_schema:
+                        break
+                routes.append(
+                    {
+                        "path": path,
+                        "method": method_upper,
+                        "summary": spec.get("summary") or spec.get("operationId"),
+                        "description": spec.get("description"),
+                        "tags": spec.get("tags", []),
+                        "parameters": spec.get("parameters", []),
+                        "has_request_body": bool(request_schema),
+                        "request_schema": request_schema,
+                        "response_schema": response_schema,
+                    }
+                )
+        routes.sort(
+            key=lambda item: (
+                item["tags"][0] if item["tags"] else "",
+                item["path"],
+                item["method"],
+            )
+        )
+        return routes
+
+    def get_api_schemas(self, app: FastAPI) -> dict[str, Any]:
+        schema = app.openapi()
+        components = schema.get("components", {})
+        return {
+            "schemas": components.get("schemas", {}),
+            "parameters": components.get("parameters", {}),
+        }
 
     async def get_health_summary(self) -> dict[str, Any]:
         db, redis_state = await asyncio.gather(
@@ -155,6 +226,73 @@ class AdminService:
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
+    async def get_trip_summary(self) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
+            engine = get_engine()
+            with engine.connect() as connection:
+                totals = (
+                    connection.execute(
+                        text(
+                            "SELECT "
+                            "(SELECT COUNT(*) FROM trips) AS total_trips, "
+                            "(SELECT COUNT(*) FROM day_cards) AS total_day_cards, "
+                            "(SELECT COUNT(*) FROM sub_trips) AS total_sub_trips"
+                        )
+                    )
+                    .mappings()
+                    .one()
+                )
+                summary = {
+                    "total_trips": int(totals["total_trips"]),
+                    "total_day_cards": int(totals["total_day_cards"]),
+                    "total_sub_trips": int(totals["total_sub_trips"]),
+                }
+                recent_rows = (
+                    connection.execute(
+                        text(
+                            "SELECT t.id AS trip_id, t.title, t.updated_at, "
+                            "COUNT(DISTINCT dc.id) AS day_count, "
+                            "COUNT(st.id) AS sub_trip_count "
+                            "FROM trips t "
+                            "LEFT JOIN day_cards dc ON dc.trip_id = t.id "
+                            "LEFT JOIN sub_trips st ON st.day_card_id = dc.id "
+                            "GROUP BY t.id "
+                            "ORDER BY t.updated_at DESC "
+                            "LIMIT 10"
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+                summary["recent_trips"] = [
+                    {
+                        "trip_id": int(row["trip_id"]),
+                        "title": row["title"],
+                        "updated_at": _format_iso(row["updated_at"]),
+                        "day_count": int(row["day_count"]),
+                        "sub_trip_count": int(row["sub_trip_count"]),
+                    }
+                    for row in recent_rows
+                ]
+                return summary
+
+        try:
+            summary = await to_thread.run_sync(_run)
+        except SQLAlchemyError as exc:
+            return {
+                "error": self._format_db_error(exc),
+                "total_trips": None,
+                "total_day_cards": None,
+                "total_sub_trips": None,
+                "recent_trips": [],
+                "avg_sub_trips_per_day": None,
+            }
+        total_day_cards = summary.get("total_day_cards") or 0
+        total_sub_trips = summary.get("total_sub_trips") or 0
+        avg = round(total_sub_trips / total_day_cards, 2) if total_day_cards else 0.0
+        summary["avg_sub_trips_per_day"] = avg
+        return summary
+
     async def get_redis_status(self) -> dict[str, Any]:
         return await check_redis_health()
 
@@ -164,11 +302,12 @@ class AdminService:
         app: FastAPI,
         base_url: str,
     ) -> ApiTestResult:
+        api_path = self._prepare_api_path(payload.path, payload.path_params)
         result = await perform_internal_request(
             app=app,
             base_url=base_url,
             method=payload.method,
-            path=payload.path,
+            path=api_path,
             query=payload.query,
             headers=payload.headers,
             json_body=payload.json_body,
@@ -186,6 +325,55 @@ class AdminService:
     async def list_data_checks(self) -> list[DataCheckResult]:
         return await self._check_registry.run_all()
 
+    async def get_db_schema_overview(self) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
+            engine = get_engine()
+            inspector = inspect(engine)
+            tables: dict[str, Any] = {}
+            for name in sorted(inspector.get_table_names()):
+                columns = inspector.get_columns(name)
+                pk = inspector.get_pk_constraint(name)
+                fks = inspector.get_foreign_keys(name)
+                indexes = inspector.get_indexes(name)
+                tables[name] = {
+                    "columns": [
+                        {
+                            "name": column["name"],
+                            "type": str(column["type"]),
+                            "nullable": column.get("nullable", True),
+                            "default": (
+                                str(column.get("default"))
+                                if column.get("default") is not None
+                                else None
+                            ),
+                        }
+                        for column in columns
+                    ],
+                    "primary_key": pk.get("constrained_columns", []) if pk else [],
+                    "foreign_keys": [
+                        {
+                            "constrained_columns": fk.get("constrained_columns", []),
+                            "referred_table": fk.get("referred_table"),
+                            "referred_columns": fk.get("referred_columns", []),
+                        }
+                        for fk in fks
+                    ],
+                    "indexes": [
+                        {
+                            "name": idx.get("name"),
+                            "column_names": idx.get("column_names"),
+                            "unique": bool(idx.get("unique")),
+                        }
+                        for idx in indexes
+                    ],
+                }
+            return {"tables": tables}
+
+        try:
+            return await to_thread.run_sync(_run)
+        except SQLAlchemyError as exc:
+            return {"tables": {}, "error": self._format_db_error(exc)}
+
     async def _collect_table_counts(self) -> dict[str, dict[str, Any]]:
         def _run() -> dict[str, dict[str, Any]]:
             engine = get_engine()
@@ -196,7 +384,9 @@ class AdminService:
                         count = connection.execute(
                             text(f"SELECT COUNT(*) FROM {table}")
                         ).scalar_one()
-                    except SQLAlchemyError as exc:  # pragma: no cover - dialect specific
+                    except (
+                        SQLAlchemyError
+                    ) as exc:  # pragma: no cover - dialect specific
                         stats[table] = {
                             "row_count": None,
                             "error": self._format_db_error(exc),
@@ -206,6 +396,38 @@ class AdminService:
             return stats
 
         return await to_thread.run_sync(_run)
+
+    def _extract_schema_name(self, schema: dict[str, Any] | None) -> str | None:
+        if not schema:
+            return None
+        ref = schema.get("$ref")
+        if ref:
+            return ref.split("/")[-1]
+        if "items" in schema:
+            nested = self._extract_schema_name(schema.get("items"))
+            return f"{nested}[]" if nested else "array"
+        schema_type = schema.get("type")
+        if schema_type:
+            return schema_type
+        return None
+
+    def _prepare_api_path(
+        self,
+        path: str,
+        path_params: dict[str, Any] | None,
+    ) -> str:
+        normalized = path if path.startswith("/") else f"/{path}"
+        if path_params:
+            for key, value in path_params.items():
+                placeholder = "{" + key + "}"
+                normalized = normalized.replace(placeholder, str(value))
+        if "{" in normalized or "}" in normalized:
+            msg = "存在未替换的路径参数"
+            raise ValueError(msg)
+        if not normalized.startswith("/api/"):
+            msg = "仅允许在此处调用 /api/* 接口"
+            raise ValueError(msg)
+        return normalized
 
     async def _run_db_callable(self, func: Callable[[Connection], Any]) -> Any:
         def _runner() -> Any:
@@ -309,9 +531,10 @@ class AdminService:
             suggestion=suggestion,
         )
 
-
     async def _build_postgis_check(self) -> DataCheckResult:
-        stmt = text("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis')")
+        stmt = text(
+            "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis')"
+        )
         try:
             enabled = await self._run_db_callable(
                 lambda conn: bool(conn.execute(stmt).scalar())
@@ -470,6 +693,17 @@ class AdminService:
             detail=detail,
             suggestion=suggestion,
         )
+
+
+def _format_iso(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:  # pragma: no cover - defensive
+            return str(value)
+    return str(value)
 
 
 _admin_service: AdminService | None = None

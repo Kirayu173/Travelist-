@@ -12,6 +12,7 @@ class ApiTestRequest(BaseModel):
     method: HttpMethod = "GET"
     path: str
     query: dict[str, Any] | None = None
+    path_params: dict[str, Any] | None = None
     headers: dict[str, str] | None = None
     json_body: dict[str, Any] | None = None
     timeout_ms: int = Field(5000, ge=100, le=60000)
@@ -49,6 +50,9 @@ class ApiTestCase(BaseModel):
     method: HttpMethod
     path: str
     description: str | None = None
+    query: dict[str, Any] | None = None
+    path_params: dict[str, Any] | None = None
+    json_body: dict[str, Any] | None = None
 
 
 class DataCheckResult(BaseModel):

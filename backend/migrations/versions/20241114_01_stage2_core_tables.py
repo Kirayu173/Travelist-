@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from geoalchemy2 import Geography
 from sqlalchemy.dialects import postgresql
 
@@ -49,7 +49,9 @@ def upgrade() -> None:
         sa.Column("id", BIGINT, primary_key=True, autoincrement=True),
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("name", sa.String(length=255), nullable=True),
-        sa.Column("preferences", json_type, nullable=False, server_default=json_default),
+        sa.Column(
+            "preferences", json_type, nullable=False, server_default=json_default
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -203,7 +205,9 @@ def upgrade() -> None:
             ondelete="SET NULL",
             name="fk_sub_trips_poi_id_pois",
         ),
-        sa.UniqueConstraint("day_card_id", "order_index", name="uq_sub_trips_day_order"),
+        sa.UniqueConstraint(
+            "day_card_id", "order_index", name="uq_sub_trips_day_order"
+        ),
     )
 
     op.create_table(

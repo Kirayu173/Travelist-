@@ -3,9 +3,9 @@
 from app.admin import AdminService, get_admin_service, templates
 from app.admin.schemas import ApiTestRequest
 from app.core.settings import settings
-from app.utils.responses import success_response
+from app.utils.responses import error_response, success_response
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
 
@@ -62,12 +62,36 @@ async def admin_api_test(
 ) -> dict:
     """Execute a HTTP call against the running FastAPI app."""
 
-    result = await admin_service.run_api_test(
-        payload,
-        request.app,
-        str(request.base_url),
-    )
+    try:
+        result = await admin_service.run_api_test(
+            payload,
+            request.app,
+            str(request.base_url),
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content=error_response(str(exc), code=14020),
+        )
     return success_response(result)
+
+
+@router.get("/api/routes")
+def admin_api_routes(
+    request: Request,
+    admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
+) -> dict:
+    routes = admin_service.get_api_routes(request.app)
+    return success_response({"routes": routes})
+
+
+@router.get("/api/schemas")
+def admin_api_schemas(
+    request: Request,
+    admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
+) -> dict:
+    data = admin_service.get_api_schemas(request.app)
+    return success_response(data)
 
 
 @router.get("/health")
@@ -100,6 +124,29 @@ async def admin_db_stats(
     return success_response(stats)
 
 
+@router.get("/db/schema")
+async def admin_db_schema(
+    request: Request,
+    admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
+):
+    """Return table schema metadata or render structure page."""
+
+    schema = await admin_service.get_db_schema_overview()
+    accept = (request.headers.get("accept") or "").lower()
+    wants_html = (
+        "text/html" in accept
+        and "application/json" not in accept
+        or request.query_params.get("view") == "1"
+    )
+    if wants_html:
+        context = {
+            "request": request,
+            "schema": schema,
+        }
+        return templates.TemplateResponse("db_schema.html", context)
+    return success_response(schema)
+
+
 @router.get("/db/status")
 async def admin_db_status(
     admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
@@ -125,3 +172,17 @@ async def admin_data_checks(
     checks = await admin_service.list_data_checks()
     payload = [check.model_dump(mode="json") for check in checks]
     return success_response(payload)
+
+
+@router.get("/trips/summary")
+async def admin_trip_summary(
+    admin_service: AdminService = Depends(get_admin_service),  # noqa: B008
+) -> dict:
+    summary = await admin_service.get_trip_summary()
+    return success_response(summary)
+
+
+@router.get("/api-docs", response_class=HTMLResponse)
+async def admin_api_docs(request: Request) -> HTMLResponse:
+    context = {"request": request}
+    return templates.TemplateResponse("api_docs.html", context)

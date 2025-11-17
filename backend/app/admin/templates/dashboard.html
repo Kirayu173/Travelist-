@@ -154,6 +154,22 @@
         color: #c0392b;
         font-size: 13px;
       }
+
+      ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .card-links {
+        margin-top: 8px;
+        font-size: 13px;
+      }
+
+      .card-links a {
+        color: #3867ff;
+        margin-right: 12px;
+        text-decoration: none;
+      }
     </style>
   </head>
   <body>
@@ -239,6 +255,34 @@
           </tbody>
         </table>
       </section>
+
+      <section class="card">
+        <h2>行程概览</h2>
+        <p>行程总数：<strong id="tripTotal">{{ trip_summary.total_trips or 0 }}</strong></p>
+        <p>DayCard 总数：<strong id="dayCardTotal">{{ trip_summary.total_day_cards or 0 }}</strong></p>
+        <p>子行程总数：<strong id="subTripTotal">{{ trip_summary.total_sub_trips or 0 }}</strong></p>
+        <p>平均每日子行程序：<strong id="avgSubTrip">{{ trip_summary.avg_sub_trips_per_day or 0 }}</strong></p>
+        <div class="card-links">
+          <a href="/admin/api-docs" target="_blank">API 文档 &amp; 在线测试</a>
+          <a href="/admin/db/schema?view=1" target="_blank">数据库结构视图</a>
+        </div>
+        <h3>最近修改</h3>
+        <ul id="recentTripList">
+          {% if trip_summary.recent_trips %}
+            {% for trip in trip_summary.recent_trips %}
+              <li>
+                {{ trip.title or "未命名行程" }} · {{ trip.updated_at or "-" }} · {{ trip.day_count }} 天 /
+                {{ trip.sub_trip_count }} 子行程
+              </li>
+            {% endfor %}
+          {% else %}
+            <li class="muted">暂无行程数据</li>
+          {% endif %}
+        </ul>
+        {% if trip_summary.error %}
+          <p class="error-text">{{ trip_summary.error }}</p>
+        {% endif %}
+      </section>
     </div>
 
     <div class="grid" style="margin-top: 24px">
@@ -271,7 +315,16 @@
           </label>
           <label>
             路径
-            <input id="testPath" placeholder="/healthz" value="/healthz" />
+            <input id="testPath" placeholder="/api/trips" value="/api/trips" />
+            <small class="muted">仅支持 /api/* 路径</small>
+          </label>
+          <label>
+            Query Params (JSON)
+            <textarea id="testQuery" placeholder='{"user_id":1}'></textarea>
+          </label>
+          <label>
+            Path Params (JSON)
+            <textarea id="testPathParams" placeholder='{"trip_id":1}'></textarea>
           </label>
           <label>
             JSON Body
@@ -316,6 +369,7 @@
       const summaryData = {{ api_summary | tojson }};
       const initialChecks = {{ checks | tojson }};
       const testCases = {{ predefined_tests | tojson }};
+      const tripSummary = {{ trip_summary | tojson }};
       const apiResults = [];
 
       function renderRoutes(data) {
@@ -333,6 +387,30 @@
                 </tr>`
             )
             .join("") || `<tr><td colspan="5">暂无数据</td></tr>`;
+      }
+
+      function renderTripSummary(data) {
+        const safe = data || {};
+        document.getElementById("tripTotal").innerText = safe.total_trips ?? 0;
+        document.getElementById("dayCardTotal").innerText = safe.total_day_cards ?? 0;
+        document.getElementById("subTripTotal").innerText = safe.total_sub_trips ?? 0;
+        document.getElementById("avgSubTrip").innerText = safe.avg_sub_trips_per_day ?? 0;
+        const list = document.getElementById("recentTripList");
+        const trips = safe.recent_trips || [];
+        list.innerHTML =
+          trips.length > 0
+            ? trips
+                .map(
+                  (trip) =>
+                    `<li>${escapeHtml(trip.title || "未命名行程")} · ${trip.updated_at || "-"} · ${
+                      trip.day_count ?? 0
+                    } 天 / ${trip.sub_trip_count ?? 0} 子行程</li>`
+                )
+                .join("")
+            : `<li class="muted">暂无行程数据</li>`;
+        if (safe.error) {
+          list.innerHTML += `<li class="error-text">${escapeHtml(safe.error)}</li>`;
+        }
       }
 
       function renderChecks(checks) {
@@ -394,6 +472,18 @@
         }
       }
 
+      async function refreshTripSummary() {
+        try {
+          const resp = await fetch("/admin/trips/summary");
+          const body = await resp.json();
+          if (body?.data) {
+            renderTripSummary(body.data);
+          }
+        } catch (err) {
+          console.error("refresh trip summary failed", err);
+        }
+      }
+
       function renderApiResults() {
         const tbody = document.getElementById("apiResultTable");
         tbody.innerHTML =
@@ -434,27 +524,45 @@
         await executeApiTest(`预设-${testCase.name}`, {
           method: testCase.method,
           path: testCase.path,
+          query: testCase.query,
+          path_params: testCase.path_params,
+          json_body: testCase.json_body,
         });
       }
 
       async function runManualApiTest() {
         const method = document.getElementById("testMethod").value;
         const path = document.getElementById("testPath").value;
-        const bodyText = document.getElementById("testBody").value.trim();
-        let json = null;
-        if (bodyText) {
-          try {
-            json = JSON.parse(bodyText);
-          } catch (err) {
-            alert("JSON Body 格式错误");
-            return;
-          }
+        let queryParams = null;
+        let pathParams = null;
+        let body = null;
+        try {
+          queryParams = parseJsonInput("testQuery");
+          pathParams = parseJsonInput("testPathParams");
+          body = parseJsonInput("testBody");
+        } catch (err) {
+          alert(err.message || "JSON 解析失败");
+          return;
         }
         await executeApiTest(`手动-${method} ${path}`, {
           method,
           path,
-          json_body: json,
+          query: queryParams,
+          path_params: pathParams,
+          json_body: body,
         });
+      }
+
+      function parseJsonInput(elementId) {
+        const raw = document.getElementById(elementId).value.trim();
+        if (!raw) {
+          return null;
+        }
+        try {
+          return JSON.parse(raw);
+        } catch (err) {
+          throw new Error(`${elementId} JSON 格式错误`);
+        }
       }
 
       async function executeApiTest(source, payload) {
@@ -508,13 +616,16 @@
       }
 
       renderRoutes(summaryData.routes || []);
+      renderTripSummary(tripSummary || {});
       renderChecks(initialChecks);
       renderTestCases(testCases);
       renderApiResults();
       refreshChecks();
       refreshSummary();
+      refreshTripSummary();
       setInterval(refreshSummary, 30000);
       setInterval(refreshChecks, 60000);
+      setInterval(refreshTripSummary, 60000);
     </script>
   </body>
 </html>

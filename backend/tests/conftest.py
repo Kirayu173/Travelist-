@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = PROJECT_ROOT / "backend"
@@ -25,6 +26,8 @@ from backend.tests.utils.db import (
     ensure_database,
 )
 
+FAST_DB_MODE = os.environ.get("PYTEST_FAST_DB") == "1"
+
 
 @pytest.fixture(scope="session", autouse=True)
 def configure_test_database() -> str:
@@ -35,14 +38,18 @@ def configure_test_database() -> str:
     db_name = base_url.database or "travelist"
     test_db_name = f"{db_name}_test"
     admin_url = clone_url_with_database(base_url, "postgres")
-    drop_database(admin_url, test_db_name)
-    ensure_database(admin_url, test_db_name)
+    if FAST_DB_MODE:
+        ensure_database(admin_url, test_db_name)
+    else:
+        drop_database(admin_url, test_db_name)
+        ensure_database(admin_url, test_db_name)
     test_url = clone_url_with_database(base_url, test_db_name)
     settings.database_url = test_url.render_as_string(hide_password=False)
     dispose_engine()
     yield settings.database_url
     dispose_engine()
-    drop_database(admin_url, test_db_name)
+    if not FAST_DB_MODE:
+        drop_database(admin_url, test_db_name)
     settings.database_url = original_url
     dispose_engine()
 
@@ -59,7 +66,8 @@ def apply_migrations(configure_test_database: str) -> None:
     command.upgrade(alembic_cfg, "head")
     yield
     dispose_engine()
-    command.downgrade(alembic_cfg, "base")
+    if not FAST_DB_MODE:
+        command.downgrade(alembic_cfg, "base")
 
 
 @pytest.fixture()

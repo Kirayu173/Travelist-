@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from sqlalchemy.engine import URL
 from psycopg import connect, sql
+from sqlalchemy.engine import URL
 
 
 def to_psycopg_url(url: URL) -> URL:

@@ -5,11 +5,10 @@ from enum import StrEnum
 from typing import Any
 
 import sqlalchemy as sa
+from app.models import Base
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
-
-from app.models import Base
 
 JSONType = sa.JSON().with_variant(
     postgresql.JSONB(astext_type=sa.Text()),
@@ -19,7 +18,7 @@ BIGINT_TYPE = sa.BigInteger().with_variant(sa.Integer, "sqlite")
 
 
 class PointGeography(TypeDecorator):
-    """Portable geography column storing WGS84 coordinates when Postgres is available."""
+    """Portable geography column storing WGS84 coords when Postgres is available."""
 
     impl = sa.String(255)
     cache_ok = True
@@ -53,12 +52,25 @@ class TransportMode(StrEnum):
     TRANSIT = "transit"
 
 
+def _transport_values(enum_cls: type[TransportMode]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 TRANSPORT_ENUM = sa.Enum(
     TransportMode,
     name="transport",
     native_enum=False,
     validate_strings=True,
-    values_callable=lambda enum_cls: [member.value for member in enum_cls],
+    values_callable=_transport_values,
+).with_variant(
+    sa.Enum(
+        TransportMode,
+        name="transport",
+        native_enum=True,
+        validate_strings=True,
+        values_callable=_transport_values,
+    ),
+    "postgresql",
 )
 
 
@@ -178,7 +190,9 @@ class Poi(TimestampMixin, Base):
 class SubTrip(TimestampMixin, Base):
     __tablename__ = "sub_trips"
     __table_args__ = (
-        sa.UniqueConstraint("day_card_id", "order_index", name="uq_sub_trips_day_order"),
+        sa.UniqueConstraint(
+            "day_card_id", "order_index", name="uq_sub_trips_day_order"
+        ),
     )
 
     id: Mapped[int] = mapped_column(

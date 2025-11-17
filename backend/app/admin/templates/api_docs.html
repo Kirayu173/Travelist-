@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>API 文档与在线测试 · Travelist+</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #f5f7fb;
+        color: #111;
+      }
+
+      header {
+        padding: 20px 24px;
+        background: #fff;
+        border-bottom: 1px solid #e1e6f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      header a {
+        color: #3867ff;
+        text-decoration: none;
+      }
+
+      .layout {
+        display: flex;
+        min-height: calc(100vh - 70px);
+      }
+
+      aside {
+        width: 280px;
+        border-right: 1px solid #e1e6f0;
+        background: #fff;
+        overflow-y: auto;
+      }
+
+      .routes {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .routes li {
+        padding: 10px 16px;
+        border-bottom: 1px solid #f0f2fb;
+        cursor: pointer;
+      }
+
+      .routes li.active {
+        background: #f0f4ff;
+        font-weight: 600;
+      }
+
+      .routes small {
+        display: block;
+        color: #6e7793;
+        font-size: 12px;
+      }
+
+      main {
+        flex: 1;
+        padding: 24px;
+        overflow-y: auto;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 6px 16px rgba(15, 27, 63, 0.04);
+        border: 1px solid #e4e7ef;
+      }
+
+      pre {
+        background: #111827;
+        color: #d1f6ff;
+        padding: 12px;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 90px;
+        font-size: 14px;
+        border-radius: 6px;
+        border: 1px solid #cfd7ea;
+        padding: 8px;
+        font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
+      }
+
+      .try-area {
+        margin-top: 20px;
+        border-top: 1px solid #e1e6f0;
+        padding-top: 16px;
+      }
+
+      button {
+        background: #3867ff;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 18px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid #eff2f7;
+        padding: 8px;
+        text-align: left;
+      }
+
+      .label {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .label.get {
+        background: #e6f4ff;
+        color: #0262c2;
+      }
+
+      .label.post {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .label.put,
+      .label.patch {
+        background: #ede9fe;
+        color: #5b21b6;
+      }
+
+      .label.delete {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+
+      .muted {
+        color: #6e7793;
+        font-size: 13px;
+      }
+
+      .result-panel {
+        margin-top: 12px;
+        border-radius: 8px;
+        border: 1px solid #cfd7ea;
+        padding: 10px;
+        background: #f8faff;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h2 style="margin: 0">API 文档与在线测试</h2>
+        <div class="muted">仅展示 /api/* 业务接口，方便调试</div>
+      </div>
+      <a href="/admin/dashboard">返回 Dashboard</a>
+    </header>
+
+    <div class="layout">
+      <aside>
+        <ul id="routeNav" class="routes">
+          <li class="muted">加载中...</li>
+        </ul>
+      </aside>
+      <main>
+        <div class="card" id="routeDetail">
+          <p class="muted">请选择左侧路由查看详情并进行测试。</p>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      let routes = [];
+      let schemas = {};
+      let currentIndex = -1;
+
+      async function initDocs() {
+        await Promise.all([loadRoutes(), loadSchemas()]);
+        renderRouteNav();
+        if (routes.length) {
+          selectRoute(0);
+        }
+      }
+
+      async function loadRoutes() {
+        const resp = await fetch("/admin/api/routes");
+        const body = await resp.json();
+        routes = (body && body.data && body.data.routes) || [];
+      }
+
+      async function loadSchemas() {
+        const resp = await fetch("/admin/api/schemas");
+        const body = await resp.json();
+        schemas = (body && body.data && body.data.schemas) || {};
+      }
+
+      function renderRouteNav() {
+        const nav = document.getElementById("routeNav");
+        if (!routes.length) {
+          nav.innerHTML = `<li class="muted">暂无 /api/* 路由</li>`;
+          return;
+        }
+        const groups = {};
+        routes.forEach((route, index) => {
+          const tag = (route.tags && route.tags[0]) || "default";
+          if (!groups[tag]) {
+            groups[tag] = [];
+          }
+          groups[tag].push({ route, index });
+        });
+        nav.innerHTML = Object.entries(groups)
+          .map(
+            ([tag, items]) =>
+              `<li class="muted" style="cursor:default;background:#f9fafc;font-weight:600;">${tag}</li>` +
+              items
+                .map(
+                  (item) =>
+                    `<li class="${currentIndex === item.index ? "active" : ""}" onclick="selectRoute(${item.index})">
+                      <span class="label ${item.route.method.toLowerCase()}">${item.route.method}</span>
+                      <div>${item.route.path}</div>
+                      <small>${item.route.summary || ""}</small>
+                    </li>`
+                )
+                .join("")
+          )
+          .join("");
+      }
+
+      function selectRoute(index) {
+        currentIndex = index;
+        const route = routes[index];
+        if (!route) return;
+        renderRouteNav();
+        const detail = document.getElementById("routeDetail");
+        detail.innerHTML = `
+          <h2>
+            <span class="label ${route.method.toLowerCase()}">${route.method}</span>
+            ${route.path}
+          </h2>
+          <p>${route.summary || ""}</p>
+          <p class="muted">${route.description || ""}</p>
+          <h3>参数</h3>
+          ${renderParams(route.parameters)}
+          <h3>Schema</h3>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <div style="flex:1 1 280px">
+              <strong>Request：${route.request_schema || "N/A"}</strong>
+              ${renderSchemaBlock(route.request_schema)}
+            </div>
+            <div style="flex:1 1 280px">
+              <strong>Response：${route.response_schema || "N/A"}</strong>
+              ${renderSchemaBlock(route.response_schema)}
+            </div>
+          </div>
+          ${renderTryArea(route)}
+        `;
+      }
+
+      function renderParams(params) {
+        if (!params || !params.length) {
+          return '<p class="muted">无额外参数</p>';
+        }
+        return `
+          <table>
+            <thead>
+              <tr><th>名称</th><th>位置</th><th>必填</th><th>描述</th></tr>
+            </thead>
+            <tbody>
+              ${params
+                .map(
+                  (p) =>
+                    `<tr>
+                      <td>${p.name}</td>
+                      <td>${p.in}</td>
+                      <td>${p.required ? "是" : "否"}</td>
+                      <td>${p.description || ""}</td>
+                    </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      function renderSchemaBlock(name) {
+        if (!name || !schemas[name]) {
+          return `<p class="muted">未提供 Schema 定义</p>`;
+        }
+        const example = JSON.stringify(buildExampleFromSchema(schemas[name]), null, 2);
+        return `<pre>${escapeHtml(example)}</pre>`;
+      }
+
+      function renderTryArea(route) {
+        const pathParams = extractPathParams(route.path);
+        const pathTemplate =
+          pathParams.length > 0 ? JSON.stringify(pathParams.reduce((obj, key) => ({ ...obj, [key]: "" }), {}), null, 2) : "";
+        const queryParameters = Array.isArray(route.parameters)
+          ? route.parameters.filter((p) => p.in === "query")
+          : [];
+        const queryTemplate =
+          queryParameters.length > 0
+            ? JSON.stringify(queryParameters.reduce((obj, p) => ({ ...obj, [p.name]: "" }), {}), null, 2)
+            : "";
+        const bodyTemplate = route.request_schema && schemas[route.request_schema] ? JSON.stringify(buildExampleFromSchema(schemas[route.request_schema]), null, 2) : "";
+        return `
+          <div class="try-area">
+            <h3>Try it out</h3>
+            <p class="muted">所有请求都会通过 /admin/api/test 转发至 /api/* 实际接口。</p>
+            <label>Query Params(JSON)：<textarea id="docsQuery">${queryTemplate || ""}</textarea></label>
+            <label>Path Params(JSON)：<textarea id="docsPathParams">${pathTemplate || ""}</textarea></label>
+            <label>JSON Body：<textarea id="docsBody">${bodyTemplate || ""}</textarea></label>
+            <button type="button" onclick="executeDocsTest(${currentIndex})">发送请求</button>
+            <div class="result-panel" id="docsResult">等待执行...</div>
+          </div>
+        `;
+      }
+
+      function extractPathParams(path) {
+        const matches = path.match(/{(.*?)}/g);
+        if (!matches) return [];
+        return matches.map((m) => m.replace(/[{}]/g, ""));
+      }
+
+      function buildExampleFromSchema(schema, seen = new Set()) {
+        if (!schema) return {};
+        if (schema.$ref) {
+          const name = schema.$ref.split("/").pop();
+          if (!name || seen.has(name) || !schemas[name]) {
+            return {};
+          }
+          seen.add(name);
+          return buildExampleFromSchema(schemas[name], seen);
+        }
+        if (schema.type === "array") {
+          return [buildExampleFromSchema(schema.items, new Set(seen))];
+        }
+        if (schema.type === "object" || schema.properties) {
+          const obj = {};
+          Object.entries(schema.properties || {}).forEach(([key, value]) => {
+            obj[key] = buildExampleFromSchema(value, new Set(seen));
+          });
+          return obj;
+        }
+        if (schema.type === "string") return "";
+        if (schema.type === "integer" || schema.type === "number") return 0;
+        if (schema.type === "boolean") return false;
+        return {};
+      }
+
+      function escapeHtml(value) {
+        return value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] || ch));
+      }
+
+      async function executeDocsTest(index) {
+        const route = routes[index];
+        if (!route) return;
+        const resultBox = document.getElementById("docsResult");
+        let query = null;
+        let pathParams = null;
+        let body = null;
+        try {
+          query = parseJson(document.getElementById("docsQuery").value);
+          pathParams = parseJson(document.getElementById("docsPathParams").value);
+          body = parseJson(document.getElementById("docsBody").value);
+        } catch (err) {
+          resultBox.innerHTML = `<p class="muted">${err.message}</p>`;
+          return;
+        }
+        resultBox.innerHTML = `<p class="muted">执行中...</p>`;
+        try {
+          const resp = await fetch("/admin/api/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              method: route.method,
+              path: route.path,
+              query,
+              path_params: pathParams,
+              json_body: body,
+            }),
+          });
+          const payload = await resp.json();
+          if (!resp.ok) {
+            const message = (payload && payload.msg) || "unknown error";
+            resultBox.innerHTML = `<p class="muted">请求失败：${escapeHtml(message)}</p>`;
+            return;
+          }
+          const statusCode =
+            payload.data && payload.data.status_code !== undefined && payload.data.status_code !== null
+              ? payload.data.status_code
+              : "N/A";
+          const latency =
+            payload.data && payload.data.duration_ms !== undefined && payload.data.duration_ms !== null
+              ? payload.data.duration_ms
+              : "-";
+          resultBox.innerHTML = `
+            <p>状态码：${statusCode} · 耗时 ${latency} ms</p>
+            <pre>${escapeHtml((payload.data && payload.data.response_body_excerpt) || "")}</pre>
+          `;
+        } catch (err) {
+          resultBox.innerHTML = `<p class="muted">执行异常：${escapeHtml(err.message || "unknown")}</p>`;
+        }
+      }
+
+      function parseJson(raw) {
+        const text = raw.trim();
+        if (!text) return null;
+        return JSON.parse(text);
+      }
+
+      initDocs();
+    </script>
+  </body>
+</html>
