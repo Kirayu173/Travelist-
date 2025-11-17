@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     jwt_secret: str = "change_me"
     jwt_alg: str = "HS256"
     jwt_expire_min: int = 60
+    log_level: str = "INFO"
+    log_directory: str = "logs"
+    log_max_bytes: int = 2 * 1024 * 1024
+    log_backup_count: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

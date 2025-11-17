@@ -1,30 +1,42 @@
-﻿from __future__ import annotations
-
-import asyncio
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Sequence
-
-from anyio import to_thread
-from app.admin.checks import CheckCallable, DataCheckRegistry
-from app.admin.schemas import (
-    ApiTestCase,
-    ApiTestRequest,
-    ApiTestResult,
-    DataCheckResult,
-)
-from app.core.db import check_db_health, get_engine
-from app.core.redis import check_redis_health
-from app.core.settings import settings
-from app.utils.http_client import perform_internal_request
-from app.utils.metrics import MetricsRegistry, get_metrics_registry
-from fastapi import FastAPI
-from sqlalchemy import inspect, text
-from sqlalchemy.engine import Connection
-from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import SQLAlchemyError
-
+from __future__ import annotations
+
+import asyncio
+import warnings
+from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Sequence
+
+from anyio import to_thread
+from app.admin.checks import CheckCallable, DataCheckRegistry
+from app.admin.schemas import (
+    ApiTestCase,
+    ApiTestRequest,
+    ApiTestResult,
+    DataCheckResult,
+)
+from app.core.cache import cache_backend
+from app.core.db import check_db_health, get_engine
+from app.core.logging import get_logger
+from app.core.redis import check_redis_health
+from app.core.settings import settings
+from app.utils.http_client import perform_internal_request
+from app.utils.metrics import MetricsRegistry, get_metrics_registry
+from fastapi import FastAPI
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Connection
+from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import SAWarning, SQLAlchemyError
+
 APP_START_TIME = datetime.now(timezone.utc)
+ADMIN_DB_STATS_NS = "admin:db_stats"
+ADMIN_TRIP_SUMMARY_NS = "admin:trip_summary"
+ADMIN_DB_SCHEMA_NS = "admin:db_schema"
+ADMIN_DB_STATS_TTL = 60
+ADMIN_TRIP_SUMMARY_TTL = 60
+ADMIN_DB_SCHEMA_TTL = 180
+LOG_TAIL_LIMIT = 120
+ERROR_TAIL_LIMIT = 60
 
 PREDEFINED_TESTS: Sequence[ApiTestCase] = [
     ApiTestCase(
@@ -73,6 +85,9 @@ class AdminService:
         self._metrics_registry = metrics_registry or get_metrics_registry()
         self._start_time = APP_START_TIME
         self._project_root = Path(__file__).resolve().parents[3]
+        self._logger = get_logger(__name__)
+        self._log_dir = Path(settings.log_directory).resolve()
+        self._log_dir.mkdir(parents=True, exist_ok=True)
         self._check_registry = DataCheckRegistry()
         self._register_builtin_checks()
 
@@ -92,6 +107,48 @@ class AdminService:
 
         self._check_registry.register(check)
 
+    def get_recent_logs(
+        self,
+        *,
+        limit: int = 80,
+        errors_only: bool = False,
+    ) -> list[dict[str, str]]:
+        if limit <= 0:
+            return []
+        log_file = self._log_dir / ("errors.log" if errors_only else "app.log")
+        if not log_file.exists():
+            return []
+        lines: deque[str] = deque(maxlen=limit)
+        try:
+            with log_file.open("r", encoding="utf-8", errors="ignore") as handle:
+                for raw_line in handle:
+                    stripped = raw_line.strip()
+                    if stripped:
+                        lines.append(stripped)
+        except OSError as exc:
+            self._logger.warning(
+                "admin.log_read_failed",
+                extra={"file": str(log_file), "error": str(exc)},
+            )
+            return []
+        entries: list[dict[str, str]] = []
+        for raw_line in reversed(list(lines)):
+            parts = [segment.strip() for segment in raw_line.split("|", 3)]
+            if len(parts) == 4:
+                timestamp, level, logger_name, message = parts
+            else:
+                timestamp, level, logger_name, message = raw_line, "", "", ""
+            entries.append(
+                {
+                    "timestamp": timestamp,
+                    "level": level,
+                    "logger": logger_name,
+                    "message": message,
+                }
+            )
+        return entries
+
+
     def _register_builtin_checks(self) -> None:
         self.register_check(self._build_db_check)
         self.register_check(self._build_redis_check)
@@ -101,16 +158,29 @@ class AdminService:
         self.register_check(self._build_seed_data_check)
         self.register_check(self._build_alembic_check)
 
-    async def get_dashboard_context(self) -> dict[str, Any]:
+    async def get_dashboard_context(self, app: FastAPI) -> dict[str, Any]:
         basic_info = self.get_basic_info()
         current_time = datetime.now(timezone.utc)
-        health, data_checks, db_stats, trip_summary = await asyncio.gather(
+        (
+            health,
+            data_checks,
+            db_stats,
+            trip_summary,
+            db_schema,
+        ) = await asyncio.gather(
             self.get_health_summary(),
             self.list_data_checks(),
             self.get_db_stats(),
             self.get_trip_summary(),
+            self.get_db_schema_overview(),
         )
         api_summary = await self.get_api_summary()
+        api_routes = self.get_api_routes(app)
+        api_components = self.get_api_schemas(app)
+        recent_logs = self.get_recent_logs(limit=LOG_TAIL_LIMIT)
+        recent_errors = self.get_recent_logs(
+            limit=ERROR_TAIL_LIMIT, errors_only=True
+        )
         db_health = health.get("db") or {
             "status": "unknown",
             "engine_url": self._redact_db_url(settings.database_url),
@@ -124,7 +194,13 @@ class AdminService:
             "db_health": db_health,
             "db_stats": db_stats,
             "api_summary": api_summary,
+            "api_routes": api_routes,
+            "api_components": api_components,
             "trip_summary": trip_summary,
+            "db_schema": db_schema,
+            "recent_logs": recent_logs,
+            "recent_errors": recent_errors,
+            "log_directory": str(self._log_dir),
             "checks": [check.model_dump(mode="json") for check in data_checks],
             "predefined_tests": [
                 case.model_dump(mode="json") for case in self.get_predefined_testcases()
@@ -216,17 +292,28 @@ class AdminService:
     async def get_db_status(self) -> dict[str, Any]:
         return await self.get_db_health()
 
-    async def get_db_stats(self) -> dict[str, Any]:
-        try:
-            tables = await self._collect_table_counts()
-        except SQLAlchemyError as exc:
-            return {"tables": {}, "error": self._format_db_error(exc)}
-        return {
-            "tables": tables,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-        }
+    async def get_db_stats(self, use_cache: bool = True) -> dict[str, Any]:
+        async def _loader() -> dict[str, Any]:
+            try:
+                tables = await self._collect_table_counts()
+            except SQLAlchemyError as exc:
+                return {"tables": {}, "error": self._format_db_error(exc)}
+            return {
+                "tables": tables,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
 
-    async def get_trip_summary(self) -> dict[str, Any]:
+        if not use_cache:
+            return await _loader()
+
+        return await cache_backend.remember_async(
+            ADMIN_DB_STATS_NS,
+            "default",
+            ADMIN_DB_STATS_TTL,
+            _loader,
+        )
+
+    async def get_trip_summary(self, use_cache: bool = True) -> dict[str, Any]:
         def _run() -> dict[str, Any]:
             engine = get_engine()
             with engine.connect() as connection:
@@ -276,22 +363,37 @@ class AdminService:
                 ]
                 return summary
 
-        try:
-            summary = await to_thread.run_sync(_run)
-        except SQLAlchemyError as exc:
-            return {
-                "error": self._format_db_error(exc),
-                "total_trips": None,
-                "total_day_cards": None,
-                "total_sub_trips": None,
-                "recent_trips": [],
-                "avg_sub_trips_per_day": None,
-            }
-        total_day_cards = summary.get("total_day_cards") or 0
-        total_sub_trips = summary.get("total_sub_trips") or 0
-        avg = round(total_sub_trips / total_day_cards, 2) if total_day_cards else 0.0
-        summary["avg_sub_trips_per_day"] = avg
-        return summary
+        async def _loader() -> dict[str, Any]:
+            try:
+                summary = await to_thread.run_sync(_run)
+            except SQLAlchemyError as exc:
+                return {
+                    "error": self._format_db_error(exc),
+                    "total_trips": None,
+                    "total_day_cards": None,
+                    "total_sub_trips": None,
+                    "recent_trips": [],
+                    "avg_sub_trips_per_day": None,
+                }
+            total_day_cards = summary.get("total_day_cards") or 0
+            total_sub_trips = summary.get("total_sub_trips") or 0
+            avg = (
+                round(total_sub_trips / total_day_cards, 2)
+                if total_day_cards
+                else 0.0
+            )
+            summary["avg_sub_trips_per_day"] = avg
+            return summary
+
+        if not use_cache:
+            return await _loader()
+
+        return await cache_backend.remember_async(
+            ADMIN_TRIP_SUMMARY_NS,
+            "default",
+            ADMIN_TRIP_SUMMARY_TTL,
+            _loader,
+        )
 
     async def get_redis_status(self) -> dict[str, Any]:
         return await check_redis_health()
@@ -325,13 +427,22 @@ class AdminService:
     async def list_data_checks(self) -> list[DataCheckResult]:
         return await self._check_registry.run_all()
 
-    async def get_db_schema_overview(self) -> dict[str, Any]:
+    async def get_db_schema_overview(
+        self,
+        use_cache: bool = True,
+    ) -> dict[str, Any]:
         def _run() -> dict[str, Any]:
             engine = get_engine()
             inspector = inspect(engine)
             tables: dict[str, Any] = {}
             for name in sorted(inspector.get_table_names()):
-                columns = inspector.get_columns(name)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=r"Did not recognize type .* of column .*",
+                        category=SAWarning,
+                    )
+                    columns = inspector.get_columns(name)
                 pk = inspector.get_pk_constraint(name)
                 fks = inspector.get_foreign_keys(name)
                 indexes = inspector.get_indexes(name)
@@ -369,10 +480,21 @@ class AdminService:
                 }
             return {"tables": tables}
 
-        try:
-            return await to_thread.run_sync(_run)
-        except SQLAlchemyError as exc:
-            return {"tables": {}, "error": self._format_db_error(exc)}
+        async def _loader() -> dict[str, Any]:
+            try:
+                return await to_thread.run_sync(_run)
+            except SQLAlchemyError as exc:
+                return {"tables": {}, "error": self._format_db_error(exc)}
+
+        if not use_cache:
+            return await _loader()
+
+        return await cache_backend.remember_async(
+            ADMIN_DB_SCHEMA_NS,
+            "default",
+            ADMIN_DB_SCHEMA_TTL,
+            _loader,
+        )
 
     async def _collect_table_counts(self) -> dict[str, dict[str, Any]]:
         def _run() -> dict[str, dict[str, Any]]:

@@ -1,4 +1,5 @@
 from app.api import admin, health, trips
+from app.core.logging import setup_logging
 from app.core.settings import settings
 from app.utils.metrics import APIMetricsMiddleware
 from fastapi import FastAPI
@@ -7,6 +8,7 @@ from fastapi import FastAPI
 def create_app() -> FastAPI:
     """Application factory registering routers, middleware, and config."""
 
+    setup_logging()
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
