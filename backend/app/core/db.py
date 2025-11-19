@@ -48,15 +48,25 @@ def _get_session_factory() -> sessionmaker[Session]:
 
 def get_session() -> Session:
     """Return a new SQLAlchemy session bound to the shared engine."""
-
     factory = _get_session_factory()
     return factory()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    FastAPI dependency for DB session.
+    Yields a synchronous SQLAlchemy Session.
+    """
+    session = get_session()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 @contextmanager
 def session_scope() -> Generator[Session, None, None]:
     """Provide transactional scope for DB interactions."""
-
     session = get_session()
     try:
         yield session

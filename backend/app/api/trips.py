@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
-
 from app.models.schemas import (
     DayCardCreate,
     DayCardUpdate,
@@ -19,6 +16,8 @@ from app.services.trip_service import (
     TripServiceError,
 )
 from app.utils.responses import error_response, success_response
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/api", tags=["trips"])
 

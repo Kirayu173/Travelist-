@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
 import os
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ for path in (PROJECT_ROOT, BACKEND_DIR):
 import pytest
 from alembic import command
 from alembic.config import Config
+from app.ai.client import reset_ai_client
 from app.core.app import create_app
 from app.core.db import dispose_engine
 from app.core.settings import settings
@@ -27,6 +29,18 @@ from backend.tests.utils.db import (
 )
 
 FAST_DB_MODE = os.environ.get("PYTEST_FAST_DB") == "1"
+
+
+@pytest.fixture(autouse=True)
+def configure_admin_and_ai() -> None:
+    """Ensure admin guard and AiClient use deterministic test settings."""
+
+    settings.admin_api_token = "test-admin-token"
+    settings.admin_allowed_ips = []
+    settings.ai_provider = "mock"
+    settings.ai_model_chat = "mock-test"
+    settings.mem0_mode = "disabled"
+    reset_ai_client()
 
 
 @pytest.fixture(scope="session", autouse=True)

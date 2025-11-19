@@ -1,1312 +1,166 @@
-<!DOCTYPE html>
-<html lang="zh">
-  <head>
-    <meta charset="utf-8" />
-    <title>Travelist+ 管理面板</title>
-    <style>
-      :root {
-        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        color: #111;
-        background: #f5f7fb;
-      }
-
-      body {
-        margin: 0;
-        padding: 0 24px 48px;
-      }
-
-      header {
-        padding: 24px 0 8px;
-      }
-
-      h1 {
-        margin: 0;
-        font-size: 28px;
-      }
-
-      .meta {
-        color: #666;
-        margin-top: 4px;
-        font-size: 14px;
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 18px;
-        margin-top: 24px;
-      }
-
-      .card {
-        background: #fff;
-        border-radius: 10px;
-        border: 1px solid #e4e7ef;
-        padding: 18px;
-        box-shadow: 0 6px 16px rgba(15, 27, 63, 0.04);
-      }
-
-      .card h2 {
-        margin-top: 0;
-        font-size: 20px;
-        color: #26335d;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 12px;
-      }
-
-      th,
-      td {
-        padding: 8px;
-        border-bottom: 1px solid #eff2f7;
-        text-align: left;
-      }
-
-      th {
-        font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #6e7793;
-      }
-
-      td {
-        font-size: 14px;
-      }
-
-      .label {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 600;
-      }
-
-      .label.ok {
-        background: #edf7f0;
-        color: #1f9254;
-      }
-
-      .label.fail {
-        background: #fdeaea;
-        color: #c0392b;
-      }
-
-      .label.unknown {
-        background: #fef4e5;
-        color: #9a5d00;
-      }
-
-      .api-test-area {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .api-test-area input,
-      .api-test-area select,
-      .api-test-area textarea {
-        font-size: 14px;
-        padding: 8px;
-        border-radius: 6px;
-        border: 1px solid #cfd7ea;
-      }
-
-      textarea {
-        resize: vertical;
-        min-height: 80px;
-      }
-
-      button {
-        padding: 10px 16px;
-        border: none;
-        border-radius: 6px;
-        font-size: 14px;
-        cursor: pointer;
-        background: #3867ff;
-        color: #fff;
-      }
-
-      pre {
-        background: #161b28;
-        color: #daf0ff;
-        padding: 12px;
-        border-radius: 8px;
-        overflow-x: auto;
-      }
-
-      .result-panel {
-        background: #f3f5ff;
-        border-radius: 8px;
-        padding: 10px;
-        border: 1px solid #dfe4ff;
-        min-height: 40px;
-      }
-
-      .muted {
-        color: #6e7793;
-        font-size: 13px;
-      }
-
-      .error-text {
-        color: #c0392b;
-        font-size: 13px;
-      }
-
-      ul {
-        margin: 0;
-        padding-left: 18px;
-      }
-
-      .card-links {
-        margin-top: 8px;
-        font-size: 13px;
-      }
-
-      .card-links a {
-        color: #3867ff;
-        margin-right: 12px;
-        text-decoration: none;
-      }
-
-      .card-wide {
-        grid-column: span 2;
-      }
-
-      @media (max-width: 800px) {
-        .card-wide {
-          grid-column: span 1;
-        }
-      }
-
-      .section-header {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .section-header p {
-        margin: 0;
-      }
-
-      .api-hub {
-        display: grid;
-        grid-template-columns: minmax(260px, 320px) 1fr;
-        gap: 16px;
-        margin-top: 12px;
-      }
-
-      @media (max-width: 960px) {
-        .api-hub {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .api-list-panel {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .api-detail-panel {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      .search-input {
-        width: 100%;
-        border-radius: 8px;
-        border: 1px solid #cfd7ea;
-        padding: 8px;
-        font-size: 14px;
-      }
-
-      .api-route-list {
-        max-height: 520px;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .api-route-item {
-        display: flex;
-        gap: 10px;
-        padding: 10px 12px;
-        border-radius: 10px;
-        border: 1px solid #dde3f7;
-        background: #f9fbff;
-        cursor: pointer;
-        text-align: left;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-        font-size: 13px;
-        color: inherit;
-      }
-
-      .api-route-item strong {
-        font-size: 14px;
-      }
-
-      .api-route-item.active {
-        border-color: #3867ff;
-        box-shadow: 0 8px 18px rgba(56, 103, 255, 0.15);
-        background: #f0f3ff;
-      }
-
-      .api-route-item:hover {
-        border-color: #9aa7ff;
-      }
-
-      .method-badge {
-        font-size: 12px;
-        font-weight: 700;
-        border-radius: 999px;
-        padding: 2px 8px;
-        align-self: flex-start;
-      }
-
-      .method-badge.get {
-        background: #e7f6ee;
-        color: #117a3c;
-      }
-
-      .method-badge.post {
-        background: #fbeeee;
-        color: #b9352a;
-      }
-
-      .method-badge.put,
-      .method-badge.patch {
-        background: #fef4e8;
-        color: #9a5d00;
-      }
-
-      .method-badge.delete {
-        background: #fdeaea;
-        color: #c72a1c;
-      }
-
-      .api-route-path {
-        font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
-        font-size: 12px;
-        color: #4c5685;
-      }
-
-      .api-route-summary {
-        font-weight: 600;
-      }
-
-      .api-route-desc {
-        color: #6e7793;
-      }
-
-      .api-doc-panel {
-        border: 1px solid #e4e7ef;
-        border-radius: 12px;
-        padding: 16px;
-        background: #fffdfa;
-      }
-
-      .api-doc-panel h4 {
-        margin-bottom: 4px;
-      }
-
-      .api-doc-panel table {
-        margin-top: 8px;
-      }
-
-      .schema-box {
-        border-radius: 10px;
-        background: #f6f8ff;
-        padding: 12px;
-        border: 1px solid #e0e5fb;
-      }
-
-      .schema-box ul {
-        list-style: none;
-        margin: 8px 0 0;
-        padding-left: 0;
-      }
-
-      .schema-box li {
-        margin-bottom: 6px;
-      }
-
-      .api-selected {
-        border: 1px dashed #cfd7ea;
-        border-radius: 10px;
-        padding: 12px;
-        background: #f7f9fe;
-      }
-
-      .api-selected strong {
-        font-size: 16px;
-      }
-
-      .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 12px;
-        margin-top: 12px;
-      }
-
-      .form-grid label {
-        display: flex;
-        flex-direction: column;
-        font-size: 13px;
-        font-weight: 600;
-        color: #374265;
-      }
-
-      .form-grid label span {
-        font-size: 12px;
-        font-weight: 400;
-        color: #8891a7;
-      }
-
-      .form-grid .full {
-        grid-column: span 2;
-      }
-
-      @media (max-width: 640px) {
-        .form-grid .full {
-          grid-column: span 1;
-        }
-      }
-
-      .table-wrapper {
-        overflow-x: auto;
-      }
-
-      .testcase-chips {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 12px;
-      }
-
-      .testcase-chip {
-        border: 1px solid #dfe3f7;
-        border-radius: 10px;
-        padding: 10px 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        background: #fff;
-        color: inherit;
-        cursor: pointer;
-        text-align: left;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-      }
-
-      .testcase-chip strong {
-        font-size: 15px;
-      }
-
-      .testcase-chip:hover {
-        border-color: #3867ff;
-        box-shadow: 0 6px 12px rgba(56, 103, 255, 0.12);
-      }
-
-      .schema-board {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        max-height: 560px;
-        overflow-y: auto;
-      }
-
-      .schema-board details {
-        border: 1px solid #e4e7ef;
-        border-radius: 10px;
-        padding: 6px 12px;
-        background: #fafbff;
-      }
-
-      .schema-board summary {
-        cursor: pointer;
-        font-weight: 600;
-      }
-
-      .schema-section {
-        margin-top: 8px;
-      }
-
-      .schema-board ul {
-        list-style: none;
-        padding-left: 0;
-      }
-
-      .schema-board li {
-        margin: 4px 0;
-        font-size: 13px;
-      }
-
-      .chip {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        font-size: 11px;
-        padding: 1px 6px;
-        margin-left: 6px;
-      }
-
-      .chip.required {
-        background: #fdeaea;
-        color: #c0392b;
-      }
-
-      .chip.optional {
-        background: #edf2ff;
-        color: #2c4ac9;
-      }
-
-      .log-list {
-        max-height: 320px;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
-      }
-
-      .log-row {
-        background: #0f172a;
-        color: #f0f6ff;
-        border-radius: 8px;
-        padding: 8px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .log-row .log-meta {
-        display: flex;
-        justify-content: space-between;
-        font-size: 12px;
-        opacity: 0.75;
-      }
-
-      .log-row .level-tag {
-        padding: 1px 6px;
-        border-radius: 999px;
-        font-size: 11px;
-        margin-left: 8px;
-      }
-
-      .log-row.level-error {
-        background: #2b0f16;
-        border-color: rgba(255, 0, 0, 0.3);
-      }
-
-      .log-row.level-warning {
-        background: #2a200d;
-        border-color: rgba(255, 196, 0, 0.3);
-      }
-
-      .log-row.level-info {
-        background: #0f1f2a;
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>{{ basic_info.app_name }} 管理面板</h1>
-      <div class="meta">
-        版本 {{ basic_info.version }} · 环境 {{ basic_info.env }} · 启动时间 {{ basic_info.start_time.isoformat()
-        }} · 当前时间 {{ current_time.isoformat() }}
-      </div>
-    </header>
-
-    <div class="grid">
-      <section class="card">
-        <h2>API 调用概览</h2>
-        <p>累计请求：<strong id="totalRequests">{{ api_summary.total_requests }}</strong></p>
-        <table>
-          <thead>
-            <tr>
-              <th>Method</th>
-              <th>Path</th>
-              <th>Count</th>
-              <th>Avg (ms)</th>
-              <th>P95 (ms)</th>
-            </tr>
-          </thead>
-          <tbody id="routesTable"></tbody>
-        </table>
-      </section>
-
-      <section class="card">
-        <h2>依赖健康状态</h2>
-        <div>
-          <p>应用：<span class="label ok">OK</span></p>
-          <p>
-            数据库：
-            <span class="label {{ db_health.status }}">{{ db_health.status|upper }}</span>
-            <br />
-            <small>延迟：{{ db_health.latency_ms or "-" }} ms</small><br />
-            <small>DSN：{{ db_health.engine_url }}</small>
-            {% if db_health.error %}<br /><small class="error-text">{{ db_health.error }}</small>{% endif %}
-          </p>
-          <p>
-            Redis：
-            <span class="label {{ health.redis.status }}">{{ health.redis.status|upper }}</span>
-            {% if health.redis.error %}<br /><small>{{ health.redis.error }}</small>{% endif %}
-          </p>
+{% extends "base.html" %}
+
+{% block title %}仪表盘 - Travelist Admin{% endblock %}
+{% block header %}开发进度概览 (Stage 4){% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 relative overflow-hidden group">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-50 rounded-full group-hover:scale-110 transition-transform"></div>
+        <div class="relative">
+            <div class="text-slate-500 text-sm font-medium mb-1">AI 总调用</div>
+            <div class="text-3xl font-bold text-slate-800" id="metric-ai-total">-</div>
+            <div class="text-xs text-green-600 mt-2 flex items-center">
+                <span class="bg-green-100 px-1.5 py-0.5 rounded mr-1">↑</span> 实时更新
+            </div>
         </div>
-      </section>
-
-      <section class="card">
-        <h2>数据库表统计</h2>
-        {% if db_stats.error %}
-        <p class="error-text">无法获取行数：{{ db_stats.error }}</p>
-        {% endif %}
-        <table>
-          <thead>
-            <tr>
-              <th>表名</th>
-              <th>行数</th>
-              <th>备注</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% if db_stats.tables %}
-              {% for name, info in db_stats.tables|dictsort %}
-              <tr>
-                <td>{{ name }}</td>
-                <td>{{ info.row_count if info.row_count is not none else "未知" }}</td>
-                <td>
-                  {% if info.error %}
-                    <span class="error-text">{{ info.error }}</span>
-                  {% elif info.row_count == 0 %}
-                    <span class="muted">当前暂无数据</span>
-                  {% else %}
-                    <span class="muted">约 {{ info.row_count }} 条</span>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            {% else %}
-              <tr><td colspan="3">尚未取得统计数据</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </section>
-
-      <section class="card">
-        <h2>行程概览</h2>
-        <p>行程总数：<strong id="tripTotal">{{ trip_summary.total_trips or 0 }}</strong></p>
-        <p>DayCard 总数：<strong id="dayCardTotal">{{ trip_summary.total_day_cards or 0 }}</strong></p>
-        <p>子行程总数：<strong id="subTripTotal">{{ trip_summary.total_sub_trips or 0 }}</strong></p>
-        <p>平均每日子行程序：<strong id="avgSubTrip">{{ trip_summary.avg_sub_trips_per_day or 0 }}</strong></p>
-        <h3>最近修改</h3>
-        <ul id="recentTripList">
-          {% if trip_summary.recent_trips %}
-            {% for trip in trip_summary.recent_trips %}
-              <li>
-                {{ trip.title or "未命名行程" }} · {{ trip.updated_at or "-" }} · {{ trip.day_count }} 天 /
-                {{ trip.sub_trip_count }} 子行程
-              </li>
-            {% endfor %}
-          {% else %}
-            <li class="muted">暂无行程数据</li>
-          {% endif %}
-        </ul>
-        {% if trip_summary.error %}
-          <p class="error-text">{{ trip_summary.error }}</p>
-        {% endif %}
-      </section>
     </div>
 
-    <div class="grid" style="margin-top: 24px">
-      <section class="card card-wide">
-        <div class="section-header">
-          <h2>API 文档与在线测试</h2>
-          <p class="muted">接口描述、参数注释与测试面板同屏展示，方便调试 /api/* 服务。</p>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 relative overflow-hidden">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-purple-50 rounded-full"></div>
+        <div class="relative">
+            <div class="text-slate-500 text-sm font-medium mb-1">平均响应耗时</div>
+            <div class="text-3xl font-bold text-slate-800" id="metric-ai-latency">-</div>
+            <div class="text-xs text-slate-400 mt-2">ms / request</div>
         </div>
-        <div class="api-hub">
-          <div class="api-list-panel">
-            <input
-              id="apiSearch"
-              class="search-input"
-              type="search"
-              placeholder="按路径或关键词过滤，例如 /api/trips"
-              oninput="handleApiSearch(this.value)"
-            />
-            <div class="api-route-list" id="apiRouteList">
-              <p class="muted">暂无 /api/* 路由。</p>
-            </div>
-          </div>
-          <div class="api-detail-panel">
-            <div id="apiDocDetail" class="api-doc-panel">
-              <p class="muted">请选择左侧接口查看描述、入参/出参 Schema 与示例。</p>
-            </div>
-            <div class="api-test-area">
-              <div id="apiSelectedInfo" class="api-selected">
-                <p class="muted">接口选择后将自动填充测试表单，亦可手动覆盖字段。</p>
-              </div>
-              <div class="form-grid">
-                <label>
-                  请求方法
-                  <select id="testMethod">
-                    <option>GET</option>
-                    <option>POST</option>
-                    <option>PUT</option>
-                    <option>PATCH</option>
-                    <option>DELETE</option>
-                    <option>HEAD</option>
-                  </select>
-                </label>
-                <label class="full">
-                  路径
-                  <input id="testPath" placeholder="/api/trips" value="/api/trips" />
-                  <span>仅支持 /api/* 路径</span>
-                </label>
-                <label class="full">
-                  Query Params (JSON)
-                  <textarea id="testQuery" placeholder='{"user_id":1}'></textarea>
-                </label>
-                <label class="full">
-                  Path Params (JSON)
-                  <textarea id="testPathParams" placeholder='{"trip_id":1}'></textarea>
-                </label>
-                <label class="full">
-                  JSON Body
-                  <textarea id="testBody" placeholder='{"key":"value"}'></textarea>
-                </label>
-              </div>
-              <button onclick="runManualApiTest()">执行手动测试</button>
-              <div id="apiTestResult" class="result-panel"></div>
-            </div>
-          </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 relative overflow-hidden">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-orange-50 rounded-full"></div>
+        <div class="relative">
+            <div class="text-slate-500 text-sm font-medium mb-1">mem0 记忆条目</div>
+            <div class="text-3xl font-bold text-slate-800" id="metric-mem-count">-</div>
+            <div class="text-xs text-orange-500 mt-2" id="metric-mem-errors">无错误</div>
         </div>
-        <div class="api-testcases">
-          <h3>预设测试用例</h3>
-          <p class="muted">点击卡片立即回放常用测试场景。</p>
-          <div id="testCaseChips" class="testcase-chips"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 relative overflow-hidden">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-50 rounded-full"></div>
+        <div class="relative">
+            <div class="text-slate-500 text-sm font-medium mb-1">系统健康度</div>
+            <div class="text-3xl font-bold text-emerald-600">100%</div>
+            <div class="text-xs text-slate-400 mt-2">PostgreSQL / Redis / Mem0</div>
         </div>
-        <div class="api-results">
-          <h3>最近测试记录</h3>
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>来源</th>
-                  <th>方法</th>
-                  <th>路径</th>
-                  <th>状态码</th>
-                  <th>耗时(ms)</th>
-                  <th>摘要</th>
-                </tr>
-              </thead>
-              <tbody id="apiResultTable"></tbody>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h3 class="font-semibold text-slate-800">最近 AI 调用 (Trace Log)</h3>
+            <button onclick="loadData()" class="text-sm text-blue-600 hover:text-blue-800">刷新</button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-slate-50 text-slate-500 font-medium">
+                    <tr>
+                        <th class="px-6 py-3">Time</th>
+                        <th class="px-6 py-3">Trace ID</th>
+                        <th class="px-6 py-3">Model</th>
+                        <th class="px-6 py-3">Latency</th>
+                        <th class="px-6 py-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100" id="logs-table-body">
+                    <tr><td colspan="5" class="px-6 py-8 text-center text-slate-400">加载中...</td></tr>
+                </tbody>
             </table>
-          </div>
         </div>
-      </section>
     </div>
 
-    <div class="grid" style="margin-top: 24px">
-      <section class="card">
-        <h2>数据检查（Data Checks）</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>名称</th>
-              <th>状态</th>
-              <th>等级</th>
-              <th>详情</th>
-            </tr>
-          </thead>
-          <tbody id="checkTable"></tbody>
-        </table>
-      </section>
-
-      <section class="card card-wide">
-        <h2>数据库结构速览</h2>
-        <p class="muted">实时读取核心表结构，辅助接口联调，不再跳转页面。</p>
-        <div id="dbSchemaPanel" class="schema-board">
-          <p class="muted">正在加载数据库结构...</p>
+    <div class="space-y-6">
+        <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+            <h3 class="text-lg font-bold mb-2">试运行 AI 助手</h3>
+            <p class="text-blue-100 text-sm mb-4">测试 LLM 连接与 mem0 记忆读写功能是否正常。</p>
+            <a href="/admin/ai/console" class="inline-block bg-white text-blue-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors">
+                进入调试台 →
+            </a>
         </div>
-      </section>
-    </div>
 
-    <div class="grid" style="margin-top: 24px">
-      <section class="card card-wide">
-        <h2>运行日志</h2>
-        <p class="muted">最新 {{ recent_logs|length }} 条 · 来源 {{ log_directory }}</p>
-        <div class="log-list">
-          {% if recent_logs %}
-            {% for log in recent_logs %}
-              <div class="log-row level-{{ (log.level or '').lower() }}">
-                <div class="log-meta">
-                  <span>{{ log.timestamp }}</span>
-                  <span>{{ log.logger }} <span class="level-tag">{{ log.level }}</span></span>
-                </div>
-                <div>{{ log.message }}</div>
-              </div>
-            {% endfor %}
-          {% else %}
-            <p class="muted">暂无日志记录。</p>
-          {% endif %}
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>错误追踪</h2>
-        <p class="muted">最近 {{ recent_errors|length }} 条 Error 日志</p>
-        <div class="log-list" style="max-height: 260px">
-          {% if recent_errors %}
-            {% for log in recent_errors %}
-              <div class="log-row level-{{ (log.level or '').lower() }}">
-                <div class="log-meta">
-                  <span>{{ log.timestamp }}</span>
-                  <span>{{ log.logger }} <span class="level-tag">{{ log.level }}</span></span>
-                </div>
-                <div>{{ log.message }}</div>
-              </div>
-            {% endfor %}
-          {% else %}
-            <p class="muted">暂无错误日志。</p>
-          {% endif %}
-        </div>
-      </section>
-    </div>
-
-    <script>
-      const summaryData = {{ api_summary | tojson }};
-      const initialChecks = {{ checks | tojson }};
-      const testCases = {{ predefined_tests | tojson }};
-      const tripSummary = {{ trip_summary | tojson }};
-      const apiResults = [];
-      const apiRoutes = {{ api_routes | tojson }} || [];
-      const apiComponents = {{ api_components | tojson }} || {};
-      const dbSchema = {{ db_schema | tojson }} || {};
-      let filteredApiRoutes = apiRoutes.slice();
-      let selectedApiIndex = filteredApiRoutes.length > 0 ? 0 : -1;
-
-      function renderRoutes(data) {
-        const table = document.getElementById("routesTable");
-        table.innerHTML =
-          data
-            .map(
-              (r) =>
-                `<tr>
-                  <td>${r.method}</td>
-                  <td>${r.path}</td>
-                  <td>${r.count}</td>
-                  <td>${r.avg_ms}</td>
-                  <td>${r.p95_ms ?? "-"}</td>
-                </tr>`
-            )
-            .join("") || `<tr><td colspan="5">暂无数据</td></tr>`;
-      }
-
-      function renderTripSummary(data) {
-        const safe = data || {};
-        document.getElementById("tripTotal").innerText = safe.total_trips ?? 0;
-        document.getElementById("dayCardTotal").innerText = safe.total_day_cards ?? 0;
-        document.getElementById("subTripTotal").innerText = safe.total_sub_trips ?? 0;
-        document.getElementById("avgSubTrip").innerText = safe.avg_sub_trips_per_day ?? 0;
-        const list = document.getElementById("recentTripList");
-        const trips = safe.recent_trips || [];
-        list.innerHTML =
-          trips.length > 0
-            ? trips
-                .map(
-                  (trip) =>
-                    `<li>${escapeHtml(trip.title || "未命名行程")} · ${trip.updated_at || "-"} · ${
-                      trip.day_count ?? 0
-                    } 天 / ${trip.sub_trip_count ?? 0} 子行程</li>`
-                )
-                .join("")
-            : `<li class="muted">暂无行程数据</li>`;
-        if (safe.error) {
-          list.innerHTML += `<li class="error-text">${escapeHtml(safe.error)}</li>`;
-        }
-      }
-
-      function renderChecks(checks) {
-        const table = document.getElementById("checkTable");
-        table.innerHTML =
-          checks
-            .map(
-              (item) =>
-                `<tr>
-                  <td>${item.name}</td>
-                  <td><span class="label ${item.status}">${item.status.toUpperCase()}</span></td>
-                  <td>${item.level}</td>
-                  <td>${item.detail}</td>
-                </tr>`
-            )
-            .join("") || `<tr><td colspan="4">暂无检查数据</td></tr>`;
-      }
-
-      function renderTestCases(cases) {
-        const container = document.getElementById("testCaseChips");
-        if (!container) return;
-        if (!cases || cases.length === 0) {
-          container.innerHTML = `<p class="muted" style="grid-column: 1 / -1">暂无预设用例</p>`;
-          return;
-        }
-        container.innerHTML = cases
-          .map((c, index) => {
-            const methodText = c.method || "GET";
-            const method = methodText.toLowerCase();
-            const summary = c.description || "未提供描述";
-            return `
-              <button type="button" class="testcase-chip" onclick="runPresetTest(${index})">
-                <span class="method-badge ${method}">${escapeHtml(methodText)}</span>
-                <strong>${escapeHtml(c.name || "未命名用例")}</strong>
-                <code class="api-route-path">${escapeHtml(c.path)}</code>
-                <span class="muted">${escapeHtml(summary)}</span>
-              </button>
-            `;
-          })
-          .join("");
-      }
-
-      function handleApiSearch(keyword = "") {
-        const value = (keyword || "").trim().toLowerCase();
-        if (!value) {
-          filteredApiRoutes = apiRoutes.slice();
-        } else {
-          filteredApiRoutes = apiRoutes.filter((route) => {
-            const haystack = `${route.path} ${route.summary || ""} ${route.description || ""}`.toLowerCase();
-            return haystack.includes(value);
-          });
-        }
-        selectedApiIndex = filteredApiRoutes.length > 0 ? 0 : -1;
-        renderApiRouteList();
-        syncSelectedRoute();
-      }
-
-      function renderApiRouteList() {
-        const container = document.getElementById("apiRouteList");
-        if (!container) return;
-        if (!filteredApiRoutes || filteredApiRoutes.length === 0) {
-          container.innerHTML = `<p class="muted">未查到匹配的接口，请调整筛选条件。</p>`;
-          return;
-        }
-        container.innerHTML = filteredApiRoutes
-          .map((route, index) => {
-            const methodText = route.method || "GET";
-            const method = methodText.toLowerCase();
-            const active = index === selectedApiIndex ? "active" : "";
-            return `
-              <button type="button" class="api-route-item ${active}" onclick="selectApiRoute(${index})">
-                <span class="method-badge ${method}">${escapeHtml(methodText)}</span>
-                <div class="api-route-text">
-                  <div class="api-route-path">${escapeHtml(route.path)}</div>
-                  <div class="api-route-summary">${escapeHtml(route.summary || "未命名接口")}</div>
-                  <div class="api-route-desc">${escapeHtml(route.description || "暂无描述")}</div>
-                </div>
-              </button>
-            `;
-          })
-          .join("");
-      }
-
-      function selectApiRoute(index) {
-        if (index < 0 || index >= filteredApiRoutes.length) {
-          return;
-        }
-        selectedApiIndex = index;
-        renderApiRouteList();
-        syncSelectedRoute();
-      }
-
-      function syncSelectedRoute() {
-        const route = filteredApiRoutes[selectedApiIndex] || null;
-        renderApiDocDetail(route);
-        hydrateManualForm(route);
-        updateSelectedInfo(route);
-      }
-
-      function renderApiDocDetail(route) {
-        const container = document.getElementById("apiDocDetail");
-        if (!container) return;
-        if (!route) {
-          container.innerHTML = `<p class="muted">暂无可展示的接口，请确认后端已注册 /api/* 路径。</p>`;
-          return;
-        }
-        const methodText = route.method || "GET";
-        const method = methodText.toLowerCase();
-        container.innerHTML = `
-          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-            <span class="method-badge ${method}">${escapeHtml(methodText)}</span>
-            <div>
-              <div class="api-route-path">${escapeHtml(route.path)}</div>
-              <div class="api-route-summary">${escapeHtml(route.summary || "未命名接口")}</div>
-            </div>
-          </div>
-          <p class="muted" style="margin-top:6px">${escapeHtml(route.description || "暂无描述。")}</p>
-          <h4>参数说明</h4>
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>参数</th>
-                  <th>位置</th>
-                  <th>必填</th>
-                  <th>类型</th>
-                  <th>说明</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${buildParameterRows(route.parameters)}
-              </tbody>
-            </table>
-          </div>
-          <h4>请求体</h4>
-          ${describeSchema(route.request_schema, "无 JSON 体要求。")}
-          <h4>响应体</h4>
-          ${describeSchema(route.response_schema, "响应体结构暂未在文档中声明。")}
-        `;
-      }
-
-      function buildParameterRows(parameters) {
-        const params = (parameters || []).map(resolveParameter).filter(Boolean);
-        if (params.length === 0) {
-          return `<tr><td colspan="5">无额外参数</td></tr>`;
-        }
-        return params
-          .map((param) => {
-            const schema = param.schema || {};
-            const type = formatSchemaType(schema);
-            const required = param.required ? "是" : "否";
-            return `
-              <tr>
-                <td>${escapeHtml(param.name)}</td>
-                <td>${escapeHtml(param.in || "-")}</td>
-                <td>${required}</td>
-                <td>${escapeHtml(type)}</td>
-                <td>${escapeHtml(param.description || "暂无说明")}</td>
-              </tr>
-            `;
-          })
-          .join("");
-      }
-
-      function resolveParameter(param) {
-        if (!param) return null;
-        if (param.$ref) {
-          const name = param.$ref.split("/").pop();
-          const params = apiComponents.parameters || {};
-          return params[name] || param;
-        }
-        return param;
-      }
-
-      function formatSchemaType(schema) {
-        if (!schema) return "object";
-        if (schema.$ref) {
-          return schema.$ref.split("/").pop();
-        }
-        if (schema.type === "array") {
-          return `${formatSchemaType(schema.items || {})}[]`;
-        }
-        return schema.type || "object";
-      }
-
-      function describeSchema(schemaName, emptyMessage = "无 JSON 体要求。") {
-        if (!schemaName) {
-          return `<p class="muted">${emptyMessage}</p>`;
-        }
-        const schemas = apiComponents.schemas || {};
-        const schema = schemas[schemaName];
-        if (!schema) {
-          return `<p class="muted">Schema ${escapeHtml(schemaName)} 暂未在 OpenAPI components 中定义。</p>`;
-        }
-        const required = new Set(schema.required || []);
-        const properties = schema.properties || {};
-        const rows = Object.keys(properties).map((key) => {
-          const prop = properties[key] || {};
-          const type = formatSchemaType(prop);
-          const desc = prop.description ? escapeHtml(prop.description) : "暂无描述";
-          const badge = required.has(key)
-            ? '<span class="chip required">必填</span>'
-            : '<span class="chip optional">可选</span>';
-          return `<li><code>${key}</code> <span class="muted">${type}</span> ${badge} — ${desc}</li>`;
-        });
-        return `
-          <div class="schema-box">
-            <p class="muted">${escapeHtml(schema.description || "未提供额外说明。")}</p>
-            <ul>
-              ${rows.join("") || "<li class='muted'>无字段说明</li>"}
+        <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+            <h3 class="font-semibold text-slate-800 mb-4">Stage 4 待办检查</h3>
+            <ul class="space-y-3 text-sm">
+                <li class="flex items-center text-slate-600">
+                    <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                    AI Client 基础封装
+                </li>
+                <li class="flex items-center text-slate-600">
+                    <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                    mem0 接入 (Local/PG)
+                </li>
+                <li class="flex items-center text-slate-600">
+                    <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                    /api/ai/chat_demo 接口
+                </li>
+                <li class="flex items-center text-slate-600">
+                    <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
+                    Admin 监控面板 (Doing)
+                </li>
             </ul>
-          </div>
-        `;
-      }
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-      function hydrateManualForm(route) {
-        if (!route) return;
-        const methodSelect = document.getElementById("testMethod");
-        const pathInput = document.getElementById("testPath");
-        if (methodSelect) {
-          methodSelect.value = route.method;
-        }
-        if (pathInput) {
-          pathInput.value = route.path;
-        }
-      }
-
-      function updateSelectedInfo(route) {
-        const container = document.getElementById("apiSelectedInfo");
-        if (!container) return;
-        if (!route) {
-          container.innerHTML = `<p class="muted">请选择左侧接口以查看注释与参数说明。</p>`;
-          return;
-        }
-        const methodText = route.method || "GET";
-        const method = methodText.toLowerCase();
-        container.innerHTML = `
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-            <span class="method-badge ${method}">${escapeHtml(methodText)}</span>
-            <strong>${escapeHtml(route.path)}</strong>
-          </div>
-          <p>${escapeHtml(route.summary || "未命名接口")}</p>
-          <p class="muted">${escapeHtml(route.description || "暂无注释")}</p>
-        `;
-      }
-
-      function renderDbSchema(schema) {
-        const container = document.getElementById("dbSchemaPanel");
-        if (!container) return;
-        const safeSchema = schema || {};
-        const tables = safeSchema.tables || {};
-        const names = Object.keys(tables);
-        if (names.length === 0) {
-          const errorText = safeSchema.error
-            ? `<p class="error-text">${escapeHtml(safeSchema.error)}</p>`
-            : `<p class="muted">未读取到任何数据表结构。</p>`;
-          container.innerHTML = errorText;
-          return;
-        }
-        container.innerHTML = names
-          .map((name, index) => {
-            const table = tables[name] || {};
-            const columnList = table.columns || [];
-            const cols = columnList.map((col) => {
-              const nullableChip = col.nullable ? '<span class="chip optional">NULL</span>' : '<span class="chip required">NOT NULL</span>';
-              const defaultText = col.default ? ` <span class="muted">默认 ${escapeHtml(col.default)}</span>` : "";
-              return `<li><code>${col.name}</code> <span class="muted">${escapeHtml(col.type || "")}</span> ${nullableChip}${defaultText}</li>`;
-            });
-            const pk = (table.primary_key || []).join(", ");
-            const fk = (table.foreign_keys || [])
-              .map((item) => {
-                const cols = (item.constrained_columns || []).join(", ");
-                const refCols = (item.referred_columns || []).join(", ");
-                if (!item.referred_table) return "";
-                const left = cols || "(unnamed)";
-                const right = refCols ? `${item.referred_table}(${refCols})` : item.referred_table;
-                return `${left} → ${right}`;
-              })
-              .filter(Boolean)
-              .join("；");
-            return `
-              <details ${index < 4 ? "open" : ""}>
-                <summary>
-                  <strong>${escapeHtml(name)}</strong>
-                  <span class="muted">列 ${columnList.length}</span>
-                </summary>
-                <div class="schema-section">
-                  <p class="muted">主键：${pk ? escapeHtml(pk) : "无"}</p>
-                  ${fk ? `<p class="muted">外键：${escapeHtml(fk)}</p>` : ""}
-                  <ul>
-                    ${cols.join("") || "<li class='muted'>暂无字段</li>"}
-                  </ul>
-                </div>
-              </details>
-            `;
-          })
-          .join("");
-      }
-
-      async function refreshChecks() {
+{% block scripts %}
+<script>
+    async function loadData() {
         try {
-          const resp = await fetch("/admin/checks");
-          const body = await resp.json();
-          if (body?.data) {
-            renderChecks(body.data);
-          }
-        } catch (err) {
-          console.error("refresh checks failed", err);
+            // 假设后端实现了 /admin/ai/summary，如果未实现，这里会报错
+            const res = await fetch('/admin/ai/summary');
+            if (!res.ok) throw new Error('API Failed');
+            const json = await res.json();
+            
+            if (json.code === 0 && json.data) {
+                const d = json.data;
+                // 更新数字
+                document.getElementById('metric-ai-total').innerText = d.ai_calls_total ?? 0;
+                document.getElementById('metric-ai-latency').innerText = (d.avg_latency_ms ?? 0).toFixed(0);
+                document.getElementById('metric-mem-count').innerText = d.mem0_calls_total ?? 0;
+                
+                if (d.mem0_errors > 0) {
+                    document.getElementById('metric-mem-errors').innerHTML = `<span class="text-red-500">⚠️ ${d.mem0_errors} errors</span>`;
+                } else {
+                    document.getElementById('metric-mem-errors').innerText = '无错误';
+                }
+
+                // 更新表格
+                const tbody = document.getElementById('logs-table-body');
+                tbody.innerHTML = '';
+                const logs = d.last_10_calls || [];
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-slate-400">暂无记录</td></tr>';
+                } else {
+                    logs.forEach(log => {
+                        const statusClass = log.success 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-red-100 text-red-700';
+                        const statusText = log.success ? 'Success' : 'Failed';
+                        const date = new Date(log.timestamp).toLocaleTimeString();
+                        
+                        const row = `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-6 py-3 text-slate-600 font-mono text-xs">${date}</td>
+                            <td class="px-6 py-3 font-mono text-xs text-slate-500" title="${log.trace_id}">${log.trace_id.substring(0,12)}...</td>
+                            <td class="px-6 py-3 text-slate-700">${log.model}</td>
+                            <td class="px-6 py-3 text-slate-600">${log.latency_ms.toFixed(0)}ms</td>
+                            <td class="px-6 py-3">
+                                <span class="${statusClass} px-2 py-0.5 rounded text-xs font-medium">${statusText}</span>
+                            </td>
+                        </tr>
+                        `;
+                        tbody.innerHTML += row;
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load summary", e);
+            // 优雅降级显示，不弹窗干扰
         }
-      }
+    }
 
-      async function refreshSummary() {
-        try {
-          const resp = await fetch("/admin/api/summary?window=300");
-          const body = await resp.json();
-          if (body?.data) {
-            document.getElementById("totalRequests").innerText = body.data.total_requests;
-            renderRoutes(body.data.routes || []);
-          }
-        } catch (err) {
-          console.error("refresh summary failed", err);
-        }
-      }
-
-      async function refreshTripSummary() {
-        try {
-          const resp = await fetch("/admin/trips/summary");
-          const body = await resp.json();
-          if (body?.data) {
-            renderTripSummary(body.data);
-          }
-        } catch (err) {
-          console.error("refresh trip summary failed", err);
-        }
-      }
-
-      function renderApiResults() {
-        const tbody = document.getElementById("apiResultTable");
-        tbody.innerHTML =
-          apiResults
-            .map(
-              (item) =>
-                `<tr>
-                  <td>${item.source}</td>
-                  <td>${item.method}</td>
-                  <td>${item.path}</td>
-                  <td>${item.status}</td>
-                  <td>${item.duration}</td>
-                  <td><pre style="margin:0;white-space:pre-wrap">${escapeHtml(item.excerpt)}</pre></td>
-                </tr>`
-            )
-            .join("") || `<tr><td colspan="6">暂无测试记录</td></tr>`;
-      }
-
-      function logApiResult(entry) {
-        apiResults.unshift(entry);
-        if (apiResults.length > 10) {
-          apiResults.pop();
-        }
-        renderApiResults();
-      }
-
-      function escapeHtml(value) {
-        if (!value) return "";
-        return value.replace(/[&<>"']/g, (ch) => {
-          const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-          return map[ch] || ch;
-        });
-      }
-
-      async function runPresetTest(index) {
-        const testCase = testCases[index];
-        if (!testCase) return;
-        await executeApiTest(`预设-${testCase.name}`, {
-          method: testCase.method,
-          path: testCase.path,
-          query: testCase.query,
-          path_params: testCase.path_params,
-          json_body: testCase.json_body,
-        });
-      }
-
-      async function runManualApiTest() {
-        const method = document.getElementById("testMethod").value;
-        const path = document.getElementById("testPath").value;
-        let queryParams = null;
-        let pathParams = null;
-        let body = null;
-        try {
-          queryParams = parseJsonInput("testQuery");
-          pathParams = parseJsonInput("testPathParams");
-          body = parseJsonInput("testBody");
-        } catch (err) {
-          alert(err.message || "JSON 解析失败");
-          return;
-        }
-        await executeApiTest(`手动-${method} ${path}`, {
-          method,
-          path,
-          query: queryParams,
-          path_params: pathParams,
-          json_body: body,
-        });
-      }
-
-      function parseJsonInput(elementId) {
-        const raw = document.getElementById(elementId).value.trim();
-        if (!raw) {
-          return null;
-        }
-        try {
-          return JSON.parse(raw);
-        } catch (err) {
-          throw new Error(`${elementId} JSON 格式错误`);
-        }
-      }
-
-      async function executeApiTest(source, payload) {
-        const container = document.getElementById("apiTestResult");
-        try {
-          const resp = await fetch("/admin/api/test", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const payloadBody = await resp.json();
-          const result = payloadBody.data;
-          if (!resp.ok || !result) {
-            const message = payloadBody?.msg || "请求失败";
-            container.innerHTML = `<p class="label fail">${message}</p>`;
-            logApiResult({
-              source,
-              method: payload.method,
-              path: payload.path,
-              status: message,
-              duration: "-",
-              excerpt: message,
-            });
-            return;
-          }
-          container.innerHTML = `
-            <p>状态码：${result.status_code ?? "N/A"} · 耗时 ${result.duration_ms} ms</p>
-            ${result.error ? `<p class="label fail">${result.error}</p>` : ""}
-            <pre>${escapeHtml(result.response_body_excerpt || "（无响应体）")}</pre>
-          `;
-          logApiResult({
-            source,
-            method: payload.method,
-            path: payload.path,
-            status: result.status_code ?? "N/A",
-            duration: result.duration_ms ?? "-",
-            excerpt: result.response_body_excerpt || result.error || "",
-          });
-        } catch (err) {
-          const message = typeof err?.message === "string" ? err.message : "请求异常";
-          container.innerHTML = `<p class="label fail">${message}</p>`;
-          logApiResult({
-            source,
-            method: payload.method,
-            path: payload.path,
-            status: "error",
-            duration: "-",
-            excerpt: message,
-          });
-        }
-      }
-
-      renderRoutes(summaryData.routes || []);
-      renderTripSummary(tripSummary || {});
-      renderChecks(initialChecks);
-      renderTestCases(testCases);
-      handleApiSearch("");
-      renderDbSchema(dbSchema);
-      renderApiResults();
-      refreshChecks();
-      refreshSummary();
-      refreshTripSummary();
-      setInterval(refreshSummary, 30000);
-      setInterval(refreshChecks, 60000);
-      setInterval(refreshTripSummary, 60000);
-    </script>
-  </body>
-</html>
+    // 页面加载时拉取，每 10s 自动刷新
+    loadData();
+    setInterval(loadData, 10000);
+</script>
+{% endblock %}

@@ -1,33 +1,34 @@
-from __future__ import annotations
-
-import asyncio
-import warnings
-from collections import deque
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Sequence
-
-from anyio import to_thread
-from app.admin.checks import CheckCallable, DataCheckRegistry
-from app.admin.schemas import (
-    ApiTestCase,
-    ApiTestRequest,
-    ApiTestResult,
-    DataCheckResult,
-)
-from app.core.cache import cache_backend
-from app.core.db import check_db_health, get_engine
-from app.core.logging import get_logger
-from app.core.redis import check_redis_health
-from app.core.settings import settings
-from app.utils.http_client import perform_internal_request
-from app.utils.metrics import MetricsRegistry, get_metrics_registry
-from fastapi import FastAPI
-from sqlalchemy import inspect, text
-from sqlalchemy.engine import Connection
-from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import SAWarning, SQLAlchemyError
-
+from __future__ import annotations
+
+import asyncio
+import warnings
+from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Sequence
+
+from anyio import to_thread
+from app.admin.checks import CheckCallable, DataCheckRegistry
+from app.admin.schemas import (
+    ApiTestCase,
+    ApiTestRequest,
+    ApiTestResult,
+    DataCheckResult,
+)
+from app.ai.metrics import get_ai_metrics
+from app.core.cache import cache_backend
+from app.core.db import check_db_health, get_engine
+from app.core.logging import get_logger
+from app.core.redis import check_redis_health
+from app.core.settings import settings
+from app.utils.http_client import perform_internal_request
+from app.utils.metrics import MetricsRegistry, get_metrics_registry
+from fastapi import FastAPI
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Connection
+from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import SAWarning, SQLAlchemyError
+
 APP_START_TIME = datetime.now(timezone.utc)
 ADMIN_DB_STATS_NS = "admin:db_stats"
 ADMIN_TRIP_SUMMARY_NS = "admin:trip_summary"
@@ -83,6 +84,7 @@ class AdminService:
 
     def __init__(self, metrics_registry: MetricsRegistry | None = None) -> None:
         self._metrics_registry = metrics_registry or get_metrics_registry()
+        self._ai_metrics = get_ai_metrics()
         self._start_time = APP_START_TIME
         self._project_root = Path(__file__).resolve().parents[3]
         self._logger = get_logger(__name__)
@@ -148,7 +150,6 @@ class AdminService:
             )
         return entries
 
-
     def _register_builtin_checks(self) -> None:
         self.register_check(self._build_db_check)
         self.register_check(self._build_redis_check)
@@ -175,12 +176,11 @@ class AdminService:
             self.get_db_schema_overview(),
         )
         api_summary = await self.get_api_summary()
+        ai_summary = self.get_ai_summary()
         api_routes = self.get_api_routes(app)
         api_components = self.get_api_schemas(app)
         recent_logs = self.get_recent_logs(limit=LOG_TAIL_LIMIT)
-        recent_errors = self.get_recent_logs(
-            limit=ERROR_TAIL_LIMIT, errors_only=True
-        )
+        recent_errors = self.get_recent_logs(limit=ERROR_TAIL_LIMIT, errors_only=True)
         db_health = health.get("db") or {
             "status": "unknown",
             "engine_url": self._redact_db_url(settings.database_url),
@@ -194,6 +194,7 @@ class AdminService:
             "db_health": db_health,
             "db_stats": db_stats,
             "api_summary": api_summary,
+            "ai_summary": ai_summary,
             "api_routes": api_routes,
             "api_components": api_components,
             "trip_summary": trip_summary,
@@ -214,6 +215,22 @@ class AdminService:
         if window_seconds:
             return self._metrics_registry.snapshot_window(window_seconds)
         return self._metrics_registry.snapshot()
+
+    def get_ai_summary(self) -> dict[str, Any]:
+        return self._ai_metrics.snapshot()
+
+    def get_ai_console_context(self) -> dict[str, Any]:
+        return {
+            "summary": self.get_ai_summary(),
+            "default_payload": {
+                "user_id": 1,
+                "trip_id": None,
+                "session_id": None,
+                "level": "user",
+                "use_memory": True,
+                "return_memory": True,
+            },
+        }
 
     def get_api_routes(self, app: FastAPI) -> list[dict[str, Any]]:
         schema = app.openapi()
@@ -378,9 +395,7 @@ class AdminService:
             total_day_cards = summary.get("total_day_cards") or 0
             total_sub_trips = summary.get("total_sub_trips") or 0
             avg = (
-                round(total_sub_trips / total_day_cards, 2)
-                if total_day_cards
-                else 0.0
+                round(total_sub_trips / total_day_cards, 2) if total_day_cards else 0.0
             )
             summary["avg_sub_trips_per_day"] = avg
             return summary

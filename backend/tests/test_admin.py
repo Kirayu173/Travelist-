@@ -33,8 +33,12 @@ def test_admin_summary_supports_window_parameter(client):
     assert isinstance(summary.get("routes"), list)
 
 
+def _admin_headers() -> dict[str, str]:
+    return {"X-Admin-Token": settings.admin_api_token}
+
+
 def test_admin_api_testcases_returns_presets(client):
-    resp = client.get("/admin/api/testcases")
+    resp = client.get("/admin/api/testcases", headers=_admin_headers())
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert len(data) >= 2
@@ -43,7 +47,7 @@ def test_admin_api_testcases_returns_presets(client):
 
 def test_admin_api_test_executes_sample_call(client):
     payload = {"method": "GET", "path": "/api/trips", "query": {"user_id": 1}}
-    resp = client.post("/admin/api/test", json=payload)
+    resp = client.post("/admin/api/test", json=payload, headers=_admin_headers())
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["status_code"] == 200
@@ -128,7 +132,7 @@ def test_admin_trip_summary_endpoint_returns_counts(client):
 
 
 def test_admin_api_routes_only_includes_api_paths(client):
-    resp = client.get("/admin/api/routes")
+    resp = client.get("/admin/api/routes", headers=_admin_headers())
     assert resp.status_code == 200
     routes = resp.json()["data"]["routes"]
     assert routes, "should expose api routes"
@@ -136,10 +140,31 @@ def test_admin_api_routes_only_includes_api_paths(client):
 
 
 def test_admin_api_schemas_endpoint_returns_payload(client):
-    resp = client.get("/admin/api/schemas")
+    resp = client.get("/admin/api/schemas", headers=_admin_headers())
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert "schemas" in data
+
+
+def test_admin_api_routes_requires_token(client):
+    resp = client.get("/admin/api/routes")
+    assert resp.status_code == 401
+    payload = resp.json()
+    assert payload["code"] == 2001
+
+
+def test_admin_ai_summary_requires_auth(client):
+    resp = client.get("/admin/ai/summary")
+    assert resp.status_code == 401
+    body = resp.json()
+    assert body["code"] == 2001
+
+
+def test_admin_ai_summary_returns_metrics(client):
+    resp = client.get("/admin/ai/summary", headers=_admin_headers())
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert "ai_calls_total" in data
 
 
 def test_admin_db_schema_endpoint_returns_tables(client):

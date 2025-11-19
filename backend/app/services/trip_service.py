@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 import sqlalchemy as sa
-from app.core.cache import cache_backend, build_cache_key
+from app.core.cache import build_cache_key, cache_backend
 from app.core.db import session_scope
 from app.core.logging import get_logger
 from app.models.orm import DayCard, SubTrip, Trip
@@ -22,7 +22,8 @@ from app.models.schemas import (
 )
 from app.repositories import DayCardRepository, SubTripRepository, TripRepository
 from sqlalchemy import select
-from sqlalchemy.orm import Session, attributes as orm_attributes, selectinload
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import attributes as orm_attributes
 
 TRIP_LIST_CACHE_NS = "trip:list"
 TRIP_DETAIL_CACHE_NS = "trip:detail"
@@ -453,7 +454,11 @@ class DayCardService(TripServiceBase):
 
 
 class SubTripService(TripServiceBase):
-    def create_sub_trip(self, day_card_id: int, payload: SubTripCreate) -> SubTripSchema:
+    def create_sub_trip(
+        self,
+        day_card_id: int,
+        payload: SubTripCreate,
+    ) -> SubTripSchema:
         with session_scope() as session:
             day_card = session.get(DayCard, day_card_id)
             if day_card is None:
@@ -472,7 +477,11 @@ class SubTripService(TripServiceBase):
         _invalidate_trip_list_cache()
         self.logger.info(
             "sub_trip.created",
-            extra={"trip_id": trip_id, "day_card_id": day_card_id, "sub_trip_id": schema.id},
+            extra={
+                "trip_id": trip_id,
+                "day_card_id": day_card_id,
+                "sub_trip_id": schema.id,
+            },
         )
         return schema
 

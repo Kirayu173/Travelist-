@@ -1,0 +1,487 @@
+{% extends "base.html" %}
+
+{% block title %}AI 调试台 - Travelist+ Admin{% endblock %}
+{% block header %}AI 智能体调试台{% endblock %}
+
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+    /* 基础字体 */
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    /* 滚动条美化 */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    /* 气泡样式 */
+    .chat-bubble { max-width: 92%; position: relative; line-height: 1.6; word-wrap: break-word; }
+    .chat-bubble.user { background-color: #eff6ff; color: #1e3a8a; border-bottom-right-radius: 2px; }
+    .chat-bubble.ai { background-color: #ffffff; color: #334155; border: 1px solid #e2e8f0; border-bottom-left-radius: 2px; }
+    
+    /* 思考中动画点 */
+    .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+    /* Markdown 渲染样式适配 (Prose) */
+    .prose p { margin-bottom: 0.8em; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
+    .prose ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.8em; }
+    .prose li { margin-bottom: 0.2em; }
+    .prose h1, .prose h2, .prose h3 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; color: #0f1729; }
+    .prose h1 { font-size: 1.4em; } .prose h2 { font-size: 1.2em; } .prose h3 { font-size: 1.1em; }
+    .prose blockquote { border-left: 3px solid #cbd5e1; padding-left: 1em; color: #64748b; margin-bottom: 0.8em; }
+    .prose code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.85em; font-family: 'JetBrains Mono', monospace; color: #ec4899; }
+    .prose pre { background: #1e293b; color: #f8fafc; padding: 1em; border-radius: 8px; overflow-x: auto; margin-bottom: 0.8em; }
+    .prose pre code { background: transparent; padding: 0; color: inherit; font-size: 0.85em; }
+    .prose strong { font-weight: 600; color: #0f1729; }
+    .prose a { color: #2563eb; text-decoration: underline; }
+    .prose table { width: 100%; border-collapse: collapse; margin-bottom: 0.8em; font-size: 0.9em; }
+    .prose th, .prose td { border: 1px solid #e2e8f0; padding: 0.4em 0.8em; text-align: left; }
+    .prose th { background-color: #f8fafc; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col lg:flex-row w-full h-[calc(100vh-8rem)] bg-white shadow-sm rounded-2xl overflow-hidden border border-slate-200" data-default='{{ default_payload | tojson }}' id="console-root">
+    
+    <div class="flex-1 flex flex-col relative border-r border-slate-200 min-w-0">
+        
+        <div class="h-14 border-b border-slate-100 flex items-center justify-between px-6 bg-white z-20 shrink-0">
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-100">Chat Debugger</span>
+                <span class="text-xs text-slate-400 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> 在线
+                </span>
+            </div>
+            <button onclick="toggleConfig()" class="flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-50 border border-slate-200 group">
+                <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                配置参数
+            </button>
+        </div>
+
+        <div id="configPanel" class="bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 transition-all duration-300 ease-in-out shadow-sm absolute top-14 left-0 right-0 z-10" style="display: grid;">
+            <div class="space-y-2">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">用户上下文 (Context)</label>
+                <div class="flex gap-2">
+                    <div class="relative w-1/3 group">
+                        <input type="number" id="userId" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white transition-all" placeholder="1">
+                        <div class="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-400 group-focus-within:text-blue-500">User ID</div>
+                    </div>
+                    <div class="relative w-2/3 group">
+                        <input type="number" id="tripId" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:border-blue-500 outline-none bg-white transition-all" placeholder="选填 (Trip模式必填)">
+                        <div class="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-400 group-focus-within:text-blue-500">Trip ID</div>
+                    </div>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">记忆作用域 (Scope)</label>
+                <div class="flex gap-2">
+                    <select id="level" class="w-1/3 px-2 py-2 text-xs border border-slate-300 rounded-lg focus:border-blue-500 outline-none bg-white" onchange="updateSessionPlaceholder()">
+                        <option value="user">User</option>
+                        <option value="trip">Trip</option>
+                        <option value="session">Session</option>
+                    </select>
+                    <div class="relative w-2/3 group">
+                        <input type="text" id="sessionId" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:border-blue-500 outline-none bg-white transition-all" placeholder="Session ID">
+                        <div class="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-400 group-focus-within:text-blue-500">Session ID</div>
+                    </div>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">RAG 策略</label>
+                <div class="flex gap-2">
+                    <div class="relative w-20 group">
+                        <input type="number" id="topK" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg outline-none bg-white" placeholder="5">
+                        <div class="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-400">Top K</div>
+                    </div>
+                    <select id="memoryStrategy" class="flex-1 px-2 py-2 text-xs border border-slate-300 rounded-lg outline-none bg-white">
+                        <option value="with_memory">读写记忆 (Read & Write)</option>
+                        <option value="no_memory">仅写入 (Write Only)</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="toggleConfig()" class="absolute top-2 right-2 text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+            </button>
+        </div>
+
+        <div id="chatHistory" class="flex-1 overflow-y-auto p-6 space-y-6 bg-white custom-scrollbar scroll-smooth z-0">
+            <div class="flex gap-3 justify-start">
+                <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold flex-shrink-0 mt-1">AI</div>
+                <div class="chat-bubble ai p-4 rounded-2xl shadow-sm text-sm leading-relaxed bg-slate-50 border-slate-100 text-slate-600 prose">
+                    <p>你好！我是智能体调试助手。</p>
+                    <p>请确认上方配置面板中的 <code>User ID</code> 和 <code>Level</code> 设置正确。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white border-t border-slate-100 shrink-0 z-20">
+            <div class="relative flex items-end gap-2 bg-slate-50 border border-slate-300 rounded-xl p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/30 transition-all shadow-sm">
+                <textarea id="queryInput" rows="1" class="w-full bg-transparent border-none outline-none text-sm resize-none py-3 px-2 max-h-32" placeholder="在此输入问题... (支持 Markdown)" oninput="autoResize(this)" onkeydown="handleEnter(event)"></textarea>
+                <button onclick="runChatDemo()" id="sendBtn" class="mb-1 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0" title="发送">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                </button>
+            </div>
+            <div class="flex justify-between mt-2 text-[10px] text-slate-400 px-1 select-none">
+                <span id="statusText">就绪</span>
+                <span class="font-mono">Ctrl + Enter 发送</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="hidden lg:flex w-[320px] bg-slate-50 flex-col border-l border-slate-200 shrink-0">
+        <div class="flex border-b border-slate-200 bg-white shrink-0">
+            <button onclick="switchTab('analysis')" id="tab-analysis" class="flex-1 py-3 text-xs font-medium text-blue-600 border-b-2 border-blue-600 bg-blue-50/50 transition-colors">当前分析</button>
+            <button onclick="switchTab('monitor')" id="tab-monitor" class="flex-1 py-3 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">全局监控</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            
+            <div id="view-analysis" class="space-y-4">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="px-3 py-2 bg-slate-100/50 border-b border-slate-200">
+                        <span class="text-[10px] font-bold text-slate-600 uppercase">调用元数据 (Metadata)</span>
+                    </div>
+                    <div class="p-3 space-y-2 text-xs">
+                        <div class="flex justify-between"><span class="text-slate-500">Trace ID:</span> <span class="font-mono text-slate-700" id="meta-trace">-</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">模型:</span> <span class="font-mono text-slate-700" id="meta-model">-</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">耗时:</span> <span class="font-mono text-slate-700" id="meta-latency">-</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Tokens:</span> <span class="font-mono text-slate-700" id="meta-tokens">-</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-1">
+                    <div class="px-3 py-2 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-slate-600 uppercase">记忆召回 (RAG)</span>
+                        <span class="text-[10px] bg-blue-100 text-blue-600 px-1.5 rounded" id="mem-count">0</span>
+                    </div>
+                    <div id="memoryList" class="p-3 space-y-2 text-xs min-h-[150px]">
+                        <div class="text-center text-slate-400 mt-8">等待对话...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-monitor" class="hidden space-y-4">
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                        <div class="text-[10px] text-slate-500">累计调用</div>
+                        <div class="text-lg font-bold text-slate-800" id="stat-total">-</div>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                        <div class="text-[10px] text-slate-500">平均耗时</div>
+                        <div class="text-lg font-bold text-slate-800" id="stat-latency">-</div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="px-3 py-2 bg-slate-100/50 border-b border-slate-200">
+                        <span class="text-[10px] font-bold text-slate-600 uppercase">最近日志</span>
+                    </div>
+                    <table class="w-full text-[10px] text-left">
+                        <tbody id="recentCallsBody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 初始化 marked 配置
+    marked.use({
+        breaks: true, // 启用 GitHub 风格换行
+        gfm: true     // 启用 GitHub 风格 Markdown
+    });
+
+    // --- 逐字打印 + Markdown 实时渲染 (无光标) ---
+    class Typewriter {
+        constructor(element, speed = 10) {
+            this.element = element;
+            this.queue = [];
+            this.isTyping = false;
+            this.speed = speed;
+            this.rawText = ""; // 存储 Markdown 原始内容
+        }
+
+        append(text) {
+            for (let char of text) { this.queue.push(char); }
+            if (!this.isTyping) this.type();
+        }
+
+        type() {
+            if (this.queue.length === 0) {
+                this.isTyping = false;
+                return;
+            }
+            this.isTyping = true;
+            
+            // 取出字符追加到 rawText
+            const char = this.queue.shift();
+            this.rawText += char;
+
+            // 实时解析 Markdown 并渲染
+            this.element.innerHTML = marked.parse(this.rawText);
+
+            // 自动滚动到底部
+            const history = document.getElementById('chatHistory');
+            history.scrollTop = history.scrollHeight;
+
+            // 动态速度调整：堆积越多打得越快
+            let currentSpeed = this.speed;
+            if (this.queue.length > 30) currentSpeed = 5;
+            if (this.queue.length > 100) currentSpeed = 1;
+
+            setTimeout(() => this.type(), currentSpeed);
+        }
+    }
+
+    // --- 应用逻辑 ---
+    const defaults = JSON.parse(document.getElementById('console-root').dataset.default);
+    const configPanel = document.getElementById('configPanel');
+    const queryInput = document.getElementById('queryInput');
+    const chatHistory = document.getElementById('chatHistory');
+    const memoryList = document.getElementById('memoryList');
+    const statusText = document.getElementById('statusText');
+
+    // 初始化默认值
+    document.getElementById("userId").value = defaults.user_id || 1;
+    document.getElementById("tripId").value = defaults.trip_id || "";
+    document.getElementById("sessionId").value = defaults.session_id || "";
+    document.getElementById("level").value = defaults.level || "user";
+    document.getElementById("memoryStrategy").value = defaults.use_memory ? "with_memory" : "no_memory";
+    updateSessionPlaceholder();
+    refreshSummary();
+
+    // 面板切换动画
+    function toggleConfig() {
+        const panel = configPanel;
+        if (panel.classList.contains('opacity-0')) {
+            // 展开
+            panel.style.display = 'grid';
+            requestAnimationFrame(() => {
+                panel.classList.remove('opacity-0', '-translate-y-2');
+            });
+        } else {
+            // 收起
+            panel.classList.add('opacity-0', '-translate-y-2');
+            setTimeout(() => {
+                panel.style.display = 'none';
+            }, 300); 
+        }
+    }
+    
+    function updateSessionPlaceholder() {
+        const level = document.getElementById("level").value;
+        const sessInput = document.getElementById("sessionId");
+        if (level === 'session') {
+            sessInput.placeholder = "必填 (留空自动生成)";
+            sessInput.parentElement.classList.add('ring-1', 'ring-blue-300', 'rounded-lg');
+        } else {
+            sessInput.placeholder = "Session ID";
+            sessInput.parentElement.classList.remove('ring-1', 'ring-blue-300', 'rounded-lg');
+        }
+    }
+
+    function autoResize(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    }
+
+    function handleEnter(e) {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            runChatDemo();
+        }
+    }
+
+    function switchTab(tab) {
+        const analysis = document.getElementById('view-analysis');
+        const monitor = document.getElementById('view-monitor');
+        const btnAnalysis = document.getElementById('tab-analysis');
+        const btnMonitor = document.getElementById('tab-monitor');
+        
+        if (tab === 'analysis') {
+            analysis.classList.remove('hidden');
+            monitor.classList.add('hidden');
+            btnAnalysis.className = "flex-1 py-3 text-xs font-medium text-blue-600 border-b-2 border-blue-600 bg-blue-50/50 transition-colors";
+            btnMonitor.className = "flex-1 py-3 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors";
+        } else {
+            monitor.classList.remove('hidden');
+            analysis.classList.add('hidden');
+            btnMonitor.className = "flex-1 py-3 text-xs font-medium text-blue-600 border-b-2 border-blue-600 bg-blue-50/50 transition-colors";
+            btnAnalysis.className = "flex-1 py-3 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors";
+        }
+    }
+
+    async function runChatDemo() {
+        const query = queryInput.value.trim();
+        if (!query) return;
+
+        const level = document.getElementById("level").value;
+        let tripId = parseInt(document.getElementById("tripId").value, 10) || null;
+        let sessionId = document.getElementById("sessionId").value.trim();
+
+        if (level === 'trip' && !tripId) { alert("选择 Trip 模式时，Trip ID 必填"); return; }
+        if (level === 'session' && !sessionId) {
+            sessionId = 'sess_' + Date.now().toString(36);
+            document.getElementById("sessionId").value = sessionId;
+        }
+
+        // 1. 添加用户气泡
+        appendBubble('user', query);
+        queryInput.value = '';
+        queryInput.style.height = 'auto';
+        statusText.innerHTML = '<span class="text-blue-600 flex items-center gap-1"><span class="animate-spin h-3 w-3 border-2 border-blue-600 border-t-transparent rounded-full"></span> 思考中...</span>';
+        document.getElementById('sendBtn').disabled = true;
+
+        // 2. 创建 AI 气泡容器
+        const aiBubbleId = 'ai-' + Date.now();
+        // 初始显示“三个跳动点”的思考动画
+        appendBubble('ai', '<div class="flex gap-1 py-1"><div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div><div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div><div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div></div>', aiBubbleId);
+        
+        const aiContentDiv = document.querySelector(`#${aiBubbleId} .chat-bubble`);
+        // 初始化 Markdown 打字机
+        const typewriter = new Typewriter(aiContentDiv);
+
+        try {
+            const payload = {
+                user_id: parseInt(document.getElementById("userId").value),
+                trip_id: tripId,
+                session_id: sessionId || null,
+                level: level,
+                query: query,
+                top_k: parseInt(document.getElementById("topK").value, 10) || null,
+                use_memory: document.getElementById("memoryStrategy").value === "with_memory",
+                return_memory: true,
+                stream: true
+            };
+
+            const response = await fetch("/api/ai/chat_demo", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) throw new Error(response.statusText);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let isFirstChunk = true;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const jsonStr = line.slice(6).trim();
+                        if (jsonStr === '[DONE]') break;
+                        try {
+                            const event = JSON.parse(jsonStr);
+                            if (event.event === 'chunk') {
+                                if (isFirstChunk) {
+                                    aiContentDiv.innerHTML = ''; // 清空思考动画
+                                    isFirstChunk = false;
+                                    statusText.innerText = "正在回复...";
+                                }
+                                // 放入打字机队列
+                                typewriter.append(event.delta);
+                            } 
+                            else if (event.event === 'result') {
+                                renderAnalysis(event.payload);
+                                statusText.innerText = "完成";
+                            }
+                            else if (event.event === 'error') {
+                                aiContentDiv.innerHTML += `<br><span class="text-red-500 text-xs">[系统错误: ${event.message}]</span>`;
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+            refreshSummary();
+        } catch (err) {
+            document.querySelector(`#${aiBubbleId} .chat-bubble`).innerHTML = `<span class="text-red-500 font-medium">请求失败</span><br><span class="text-xs text-slate-500">${err.message}</span>`;
+            statusText.innerText = "错误";
+        } finally {
+            document.getElementById('sendBtn').disabled = false;
+        }
+    }
+
+    function appendBubble(role, htmlContent, id = null) {
+        const div = document.createElement('div');
+        if (id) div.id = id;
+        div.className = `flex gap-3 ${role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`;
+        
+        if (role === 'user') {
+            div.innerHTML = `
+                <div class="chat-bubble user px-4 py-3 rounded-2xl shadow-sm text-sm">${htmlContent.replace(/\n/g, '<br>')}</div>
+                <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-xs font-bold flex-shrink-0 mt-1 border border-slate-300">U</div>
+            `;
+        } else {
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1 shadow-sm">AI</div>
+                <div class="chat-bubble ai px-4 py-3 rounded-2xl shadow-sm text-sm font-mono text-slate-700 prose">${htmlContent}</div>
+            `;
+        }
+        chatHistory.appendChild(div);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function renderAnalysis(payload) {
+        document.getElementById('meta-trace').innerText = payload.ai_meta.trace_id?.substring(0,12) || '-';
+        document.getElementById('meta-model').innerText = payload.ai_meta.model || '-';
+        document.getElementById('meta-latency').innerText = (payload.ai_meta.latency_ms || 0).toFixed(0) + 'ms';
+        document.getElementById('meta-tokens').innerText = payload.ai_meta.usage_tokens || '-';
+
+        const memories = payload.used_memory || [];
+        document.getElementById('mem-count').innerText = memories.length + " 条";
+        
+        if (memories.length === 0) {
+            memoryList.innerHTML = '<div class="text-center text-slate-400 text-xs mt-8">本次回答未使用历史记忆</div>';
+        } else {
+            memoryList.innerHTML = memories.map(m => `
+                <div class="p-2 bg-yellow-50/50 rounded border border-yellow-100/50 text-[10px] hover:bg-yellow-50 transition-colors">
+                    <div class="flex justify-between mb-1 text-yellow-700 opacity-80">
+                        <span>Score: ${(m.score||0).toFixed(2)}</span>
+                        <span class="uppercase border border-yellow-200 px-1 rounded bg-white">${m.metadata.level || ''}</span>
+                    </div>
+                    <div class="text-slate-700 leading-snug truncate" title="${m.text}">${m.text}</div>
+                </div>
+            `).join('');
+        }
+        switchTab('analysis');
+    }
+
+    async function refreshSummary() {
+        try {
+            const resp = await fetch("/admin/ai/summary");
+            if (!resp.ok) return;
+            const { data } = await resp.json();
+            
+            document.getElementById('stat-total').innerText = data.ai_calls_total;
+            document.getElementById('stat-latency').innerText = data.avg_latency_ms.toFixed(0) + 'ms';
+            const logs = document.getElementById('recentCallsBody');
+            logs.innerHTML = (data.last_calls || []).slice(0, 10).map(call => `
+                <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <td class="py-2 px-2 font-mono text-slate-500">${call.model}</td>
+                    <td class="py-2 px-2 text-slate-600">${call.latency_ms.toFixed(0)}ms</td>
+                    <td class="py-2 px-2">
+                        <span class="w-2 h-2 rounded-full inline-block ${call.success ? 'bg-green-400' : 'bg-red-400'}"></span>
+                    </td>
+                </tr>
+            `).join('');
+        } catch(e) {}
+    }
+    setInterval(refreshSummary, 5000);
+</script>
+{% endblock %}

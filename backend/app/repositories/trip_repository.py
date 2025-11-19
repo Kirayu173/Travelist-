@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Iterable
-
 import sqlalchemy as sa
 from app.models.orm import DayCard, SubTrip, Trip, User
 from sqlalchemy import func

@@ -1,262 +1,193 @@
-<!DOCTYPE html>
-<html lang="zh">
-  <head>
-    <meta charset="utf-8" />
-    <title>数据库结构 · Travelist+</title>
-    <style>
-      body {
-        margin: 0;
-        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        background: #f5f7fb;
-        color: #111;
-      }
+{% extends "base.html" %}
 
-      header {
-        padding: 20px 24px;
-        background: #fff;
-        border-bottom: 1px solid #e1e6f0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
+{% block title %}DB 工作台 - Travelist Admin{% endblock %}
+{% block header %}数据库工作台 (Schema & Console){% endblock %}
 
-      header a {
-        color: #3867ff;
-        text-decoration: none;
-      }
-
-      .layout {
-        display: flex;
-        min-height: calc(100vh - 70px);
-      }
-
-      aside {
-        width: 260px;
-        border-right: 1px solid #e1e6f0;
-        background: #fff;
-        overflow-y: auto;
-      }
-
-      .table-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-      }
-
-      .table-list li {
-        padding: 10px 16px;
-        border-bottom: 1px solid #f0f2fb;
-        cursor: pointer;
-      }
-
-      .table-list li.active {
-        background: #eef2ff;
-        font-weight: 600;
-      }
-
-      main {
-        flex: 1;
-        padding: 24px;
-        overflow-y: auto;
-      }
-
-      .card {
-        background: #fff;
-        border-radius: 10px;
-        padding: 20px;
-        border: 1px solid #e4e7ef;
-        box-shadow: 0 6px 16px rgba(15, 27, 63, 0.04);
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 12px;
-      }
-
-      th,
-      td {
-        border-bottom: 1px solid #eff2f7;
-        padding: 8px;
-        text-align: left;
-      }
-
-      .muted {
-        color: #6e7793;
-        font-size: 13px;
-      }
-
-      button {
-        background: #3867ff;
-        border: none;
-        color: #fff;
-        border-radius: 6px;
-        padding: 8px 14px;
-        cursor: pointer;
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <div>
-        <h2 style="margin: 0">数据库结构视图</h2>
-        <div class="muted">基于 information_schema 自动生成，便于快速查阅字段、主键、索引。</div>
-      </div>
-      <div>
-        <button type="button" onclick="refreshSchema()">刷新数据</button>
-        <a href="/admin/dashboard">返回 Dashboard</a>
-      </div>
-    </header>
-
-    <div class="layout">
-      <aside>
-        <ul id="tableNav" class="table-list"></ul>
-      </aside>
-      <main>
-        <div class="card" id="tableDetail">
-          <p class="muted">正在加载表结构...</p>
-        </div>
-      </main>
+{% block content %}
+<div class="flex flex-col h-full gap-6" x-data="{ activeTab: 'schema' }">
+    
+    <div class="flex space-x-1 bg-slate-200 p-1 rounded-lg w-fit">
+        <button onclick="switchTab('schema')" id="tab-btn-schema" class="px-4 py-2 text-sm font-medium rounded-md bg-white text-slate-800 shadow-sm transition-all">表结构 (Schema)</button>
+        <button onclick="switchTab('console')" id="tab-btn-console" class="px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-800 hover:bg-white/50 transition-all">SQL 调试台</button>
     </div>
 
-    <script>
-      let schemaData = {{ schema | tojson }};
-      let currentTable = null;
+    <div id="tab-schema" class="flex-1 overflow-y-auto space-y-6">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {% for table in tables %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-700 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                        {{ table.name }}
+                    </h3>
+                    <span class="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded">{{ table.columns|length }} columns</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-white text-slate-400 font-medium border-b border-slate-100">
+                            <tr>
+                                <th class="px-6 py-2 w-1/3">Field</th>
+                                <th class="px-6 py-2 w-1/3">Type</th>
+                                <th class="px-6 py-2 w-1/3 text-right">Attrs</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            {% for col in table.columns %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-6 py-2 font-mono text-slate-700">{{ col.name }}</td>
+                                <td class="px-6 py-2 text-slate-500 text-xs">{{ col.type }}</td>
+                                <td class="px-6 py-2 text-right space-x-1">
+                                    {% if col.pk %}
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">PK</span>
+                                    {% endif %}
+                                    {% if not col.nullable %}
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600">NN</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-span-2 text-center py-12 text-slate-400">
+                未检测到数据库表，请检查数据库连接或迁移状态。
+            </div>
+            {% endfor %}
+        </div>
+    </div>
 
-      function renderNav() {
-        const nav = document.getElementById("tableNav");
-        const tables = schemaData.tables || {};
-        const names = Object.keys(tables);
-        if (!names.length) {
-          nav.innerHTML = `<li class="muted">暂无表信息</li>`;
-          document.getElementById("tableDetail").innerHTML = `<p class="muted">${schemaData.error || "请刷新以重新获取。"}</p>`;
-          return;
+    <div id="tab-console" class="hidden flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="flex-1 flex flex-col md:flex-row">
+            <div class="w-full md:w-1/3 border-r border-slate-200 flex flex-col bg-slate-50">
+                <div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Query Editor</span>
+                    <span class="text-[10px] text-orange-600 bg-orange-100 px-2 py-0.5 rounded">Read-Only (SELECT)</span>
+                </div>
+                <textarea id="sql-editor" class="flex-1 p-4 font-mono text-sm bg-slate-900 text-green-400 focus:outline-none resize-none" placeholder="SELECT * FROM users LIMIT 10;"></textarea>
+                <div class="p-4 border-t border-slate-200 bg-white">
+                    <button onclick="runQuery()" id="run-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded shadow-sm transition-colors flex justify-center items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Run Query
+                    </button>
+                </div>
+            </div>
+
+            <div class="w-full md:w-2/3 flex flex-col bg-white">
+                <div class="px-4 py-3 border-b border-slate-200 bg-slate-50 flex justify-between">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Results</span>
+                    <span id="query-status" class="text-xs text-slate-400">Ready</span>
+                </div>
+                <div class="flex-1 overflow-auto p-0 relative" id="result-container">
+                    <div class="absolute inset-0 flex items-center justify-center text-slate-400 text-sm pointer-events-none">
+                        Execute a query to see results here.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function switchTab(tab) {
+        const schemaView = document.getElementById('tab-schema');
+        const consoleView = document.getElementById('tab-console');
+        const btnSchema = document.getElementById('tab-btn-schema');
+        const btnConsole = document.getElementById('tab-btn-console');
+
+        if (tab === 'schema') {
+            schemaView.classList.remove('hidden');
+            consoleView.classList.add('hidden');
+            btnSchema.className = "px-4 py-2 text-sm font-medium rounded-md bg-white text-slate-800 shadow-sm transition-all";
+            btnConsole.className = "px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-800 hover:bg-white/50 transition-all";
+        } else {
+            schemaView.classList.add('hidden');
+            consoleView.classList.remove('hidden');
+            consoleView.classList.add('flex'); // Console needs flex layout
+            btnConsole.className = "px-4 py-2 text-sm font-medium rounded-md bg-white text-slate-800 shadow-sm transition-all";
+            btnSchema.className = "px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-800 hover:bg-white/50 transition-all";
         }
-        nav.innerHTML = names
-          .map(
-            (name) =>
-              `<li class="${currentTable === name ? "active" : ""}" onclick="selectTable('${name}')">
-                ${name}
-              </li>`
-          )
-          .join("");
-        if (!currentTable) {
-          selectTable(names[0]);
-        }
-      }
+    }
 
-      function selectTable(name) {
-        currentTable = name;
-        renderNav();
-        const info = schemaData.tables[name];
-        const detail = document.getElementById("tableDetail");
-        if (!info) {
-          detail.innerHTML = `<p class="muted">未找到表 ${name}</p>`;
-          return;
-        }
-        detail.innerHTML = `
-          <h2>${name}</h2>
-          <p class="muted">主键：${(info.primary_key || []).join(", ") || "无"}</p>
-          ${renderColumns(info.columns)}
-          ${renderForeignKeys(info.foreign_keys)}
-          ${renderIndexes(info.indexes)}
-        `;
-      }
+    async function runQuery() {
+        const query = document.getElementById('sql-editor').value;
+        const container = document.getElementById('result-container');
+        const status = document.getElementById('query-status');
+        const btn = document.getElementById('run-btn');
 
-      function renderColumns(columns) {
-        if (!columns || !columns.length) {
-          return `<p class="muted">没有列信息</p>`;
-        }
-        return `
-          <h3>字段</h3>
-          <table>
-            <thead>
-              <tr><th>名称</th><th>类型</th><th>可空</th><th>默认值</th></tr>
-            </thead>
-            <tbody>
-              ${columns
-                .map(
-                  (col) =>
-                    `<tr>
-                      <td>${col.name}</td>
-                      <td>${col.type}</td>
-                      <td>${col.nullable ? "是" : "否"}</td>
-                      <td>${col.default !== undefined && col.default !== null ? col.default : "-"}</td>
-                    </tr>`
-                )
-                .join("")}
-            </tbody>
-          </table>
-        `;
-      }
+        if (!query) return;
 
-      function renderForeignKeys(fks) {
-        if (!fks || !fks.length) {
-          return `<p class="muted">无外键</p>`;
-        }
-        return `
-          <h3>外键</h3>
-          <table>
-            <thead>
-              <tr><th>字段</th><th>引用表</th><th>引用字段</th></tr>
-            </thead>
-            <tbody>
-              ${fks
-                .map(
-                  (fk) =>
-                    `<tr>
-                      <td>${(fk.constrained_columns || []).join(", ")}</td>
-                      <td>${fk.referred_table}</td>
-                      <td>${(fk.referred_columns || []).join(", ")}</td>
-                    </tr>`
-                )
-                .join("")}
-            </tbody>
-          </table>
-        `;
-      }
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+        status.innerText = "Running...";
+        container.innerHTML = '<div class="p-4 text-slate-500">Executing...</div>';
 
-      function renderIndexes(indexes) {
-          if (!indexes || !indexes.length) {
-            return `<p class="muted">无索引</p>`;
-          }
-          return `
-            <h3>索引</h3>
-            <table>
-              <thead>
-                <tr><th>名称</th><th>字段</th><th>唯一</th></tr>
-              </thead>
-              <tbody>
-                ${indexes
-                  .map(
-                    (idx) =>
-                      `<tr>
-                        <td>${idx.name}</td>
-                        <td>${(idx.column_names || []).join(", ")}</td>
-                        <td>${idx.unique ? "是" : "否"}</td>
-                      </tr>`
-                  )
-                  .join("")}
-              </tbody>
-            </table>
-          `;
-      }
-
-      async function refreshSchema() {
-        const detail = document.getElementById("tableDetail");
-        detail.innerHTML = `<p class="muted">刷新中...</p>`;
         try {
-          const resp = await fetch("/admin/db/schema");
-          const body = await resp.json();
-          schemaData = (body && body.data) || {};
-          currentTable = null;
-          renderNav();
-        } catch (err) {
-          detail.innerHTML = `<p class="muted">刷新失败：${err.message}</p>`;
-        }
-      }
+            const res = await fetch('/admin/api/sql_test', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({query: query})
+            });
+            const json = await res.json();
 
-      renderNav();
-    </script>
-  </body>
-</html>
+            if (json.code === 0 && json.data) {
+                if (json.data.error) {
+                    renderError(json.data.error);
+                } else {
+                    renderTable(json.data.columns, json.data.rows);
+                    status.innerText = `${json.data.count} rows fetched`;
+                }
+            } else {
+                renderError(json.msg || "Unknown error");
+            }
+        } catch (e) {
+            renderError(e.message);
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50');
+        }
+    }
+
+    function renderError(msg) {
+        const container = document.getElementById('result-container');
+        const status = document.getElementById('query-status');
+        status.innerText = "Error";
+        container.innerHTML = `<div class="p-6 text-red-600 font-mono text-sm bg-red-50 h-full">Error: ${msg}</div>`;
+    }
+
+    function renderTable(columns, rows) {
+        const container = document.getElementById('result-container');
+        if (!rows || rows.length === 0) {
+            container.innerHTML = '<div class="p-6 text-slate-500 text-sm">Query returned 0 results.</div>';
+            return;
+        }
+
+        let html = '<table class="min-w-full border-collapse text-sm text-left">';
+        // Header
+        html += '<thead class="bg-slate-100 text-slate-600 sticky top-0 shadow-sm"><tr>';
+        columns.forEach(col => {
+            html += `<th class="px-4 py-2 font-semibold border-b border-slate-200 whitespace-nowrap">${col}</th>`;
+        });
+        html += '</tr></thead>';
+        
+        // Body
+        html += '<tbody class="divide-y divide-slate-100">';
+        rows.forEach(row => {
+            html += '<tr class="hover:bg-blue-50/50 transition-colors">';
+            columns.forEach(col => {
+                let val = row[col];
+                if (val === null) val = '<span class="text-slate-300 italic">null</span>';
+                else if (typeof val === 'object') val = JSON.stringify(val);
+                html += `<td class="px-4 py-2 text-slate-700 whitespace-nowrap border-r border-slate-50 last:border-0 max-w-xs overflow-hidden text-ellipsis" title="${String(val)}">${val}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        
+        container.innerHTML = html;
+    }
+</script>
+{% endblock %}

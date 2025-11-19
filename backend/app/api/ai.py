@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+import asyncio
+import json
+from contextlib import suppress
+
+from app.ai import AiClientError, AiStreamChunk
+from app.models.ai_schemas import ChatDemoPayload
+from app.services.ai_chat_service import AiChatDemoService, get_ai_chat_service
+from app.utils.responses import error_response, success_response
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse, StreamingResponse
+
+router = APIRouter(prefix="/api/ai", tags=["ai"])
+
+
+def _service() -> AiChatDemoService:
+    return get_ai_chat_service()
+
+
+@router.post(
+    "/chat_demo",
+    summary="AI 问答演示",
+    description="串联 AiClient 与 mem0，演示上下文增强与记忆写入�?",
+)
+async def chat_demo(payload: ChatDemoPayload):
+    service = _service()
+    if payload.stream:
+        return await _stream_chat(service, payload)
+
+    try:
+        result = await service.run_chat(payload)
+    except AiClientError as exc:
+        data = {"trace_id": exc.trace_id, "error_type": exc.type}
+        return JSONResponse(
+            status_code=502,
+            content=error_response("AI 调用失败", code=3001, data=data),
+        )
+    return success_response(result.model_dump(mode="json"))
+
+
+async def _stream_chat(
+    service: AiChatDemoService,
+    payload: ChatDemoPayload,
+) -> StreamingResponse:
+    queue: asyncio.Queue[str] = asyncio.Queue()
+
+    async def on_chunk(chunk: AiStreamChunk) -> None:
+        if not chunk.delta and not chunk.done:
+            return
+        event = {
+            "event": "chunk",
+            "trace_id": chunk.trace_id,
+            "index": chunk.index,
+            "delta": chunk.delta,
+            "done": chunk.done,
+        }
+        await queue.put(_format_sse(event))
+
+    async def producer() -> None:
+        try:
+            result = await service.run_chat(payload, stream_handler=on_chunk)
+            await queue.put(
+                _format_sse(
+                    {
+                        "event": "result",
+                        "payload": result.model_dump(mode="json"),
+                    }
+                )
+            )
+        except AiClientError as exc:
+            await queue.put(
+                _format_sse(
+                    {
+                        "event": "error",
+                        "error_type": exc.type,
+                        "message": exc.message,
+                        "trace_id": exc.trace_id,
+                    }
+                )
+            )
+        finally:
+            await queue.put("data: [DONE]\n\n")
+
+    producer_task = asyncio.create_task(producer())
+
+    async def event_stream():
+        try:
+            while True:
+                chunk = await queue.get()
+                yield chunk
+                if chunk.strip().endswith("[DONE]"):
+                    break
+        finally:
+            if not producer_task.done():
+                producer_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await producer_task
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+def _format_sse(payload: dict) -> str:
+    data = json.dumps(payload, ensure_ascii=False)
+    return f"data: {data}\n\n"
