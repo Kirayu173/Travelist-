@@ -458,7 +458,9 @@ class AdminService:
                         category=SAWarning,
                     )
                     columns = inspector.get_columns(name)
+
                 pk = inspector.get_pk_constraint(name)
+                pk_cols = set(pk.get("constrained_columns", []) if pk else [])
                 fks = inspector.get_foreign_keys(name)
                 indexes = inspector.get_indexes(name)
                 tables[name] = {
@@ -467,6 +469,7 @@ class AdminService:
                             "name": column["name"],
                             "type": str(column["type"]),
                             "nullable": column.get("nullable", True),
+                            "pk": column["name"] in pk_cols,
                             "default": (
                                 str(column.get("default"))
                                 if column.get("default") is not None

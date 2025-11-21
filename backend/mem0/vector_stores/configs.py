@@ -5,38 +5,16 @@ from pydantic import BaseModel, Field, model_validator
 
 class VectorStoreConfig(BaseModel):
     provider: str = Field(
-        description="Provider of the vector store (e.g., 'qdrant', 'chroma', 'upstash_vector')",
-        default="qdrant",
+        description="Provider of the vector store (e.g., 'pgvector', 'pgarray')",
+        default="pgvector",
     )
     config: Optional[Dict] = Field(
         description="Configuration for the specific vector store", default=None
     )
 
     _provider_configs: Dict[str, str] = {
-        "qdrant": "QdrantConfig",
-        "chroma": "ChromaDbConfig",
         "pgvector": "PGVectorConfig",
-        "pinecone": "PineconeConfig",
-        "mongodb": "MongoDBConfig",
-        "milvus": "MilvusDBConfig",
-        "baidu": "BaiduDBConfig",
-        "cassandra": "CassandraConfig",
-        "neptune": "NeptuneAnalyticsConfig",
-        "upstash_vector": "UpstashVectorConfig",
-        "azure_ai_search": "AzureAISearchConfig",
-        "azure_mysql": "AzureMySQLConfig",
-        "redis": "RedisDBConfig",
-        "valkey": "ValkeyConfig",
-        "databricks": "DatabricksConfig",
-        "elasticsearch": "ElasticsearchConfig",
-        "vertex_ai_vector_search": "GoogleMatchingEngineConfig",
-        "opensearch": "OpenSearchConfig",
-        "supabase": "SupabaseConfig",
-        "weaviate": "WeaviateConfig",
-        "faiss": "FAISSConfig",
         "pgarray": "PGArrayConfig",
-        "langchain": "LangchainConfig",
-        "s3_vectors": "S3VectorsConfig",
     }
 
     @model_validator(mode="after")

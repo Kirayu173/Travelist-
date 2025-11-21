@@ -186,7 +186,10 @@ logger = logging.getLogger(__name__)
 
 
 class Memory(MemoryBase):
-    def __init__(self, config: MemoryConfig = MemoryConfig()):
+    def __init__(self, config: MemoryConfig | None = None):
+        if config is None:
+            msg = "MemoryConfig is required to initialize Memory"
+            raise ValueError(msg)
         self.config = config
 
         self.custom_fact_extraction_prompt = self.config.custom_fact_extraction_prompt
@@ -1434,7 +1437,10 @@ class Memory(MemoryBase):
 
 
 class AsyncMemory(MemoryBase):
-    def __init__(self, config: MemoryConfig = MemoryConfig()):
+    def __init__(self, config: MemoryConfig | None = None):
+        if config is None:
+            msg = "MemoryConfig is required to initialize AsyncMemory"
+            raise ValueError(msg)
         self.config = config
 
         self.embedding_model = EmbedderFactory.create(

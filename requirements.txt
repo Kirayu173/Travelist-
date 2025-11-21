@@ -10,6 +10,7 @@ geoalchemy2>=0.14.2
 alembic>=1.13.0
 starlette>=0.37.0
 ollama>=0.1.8
+mem0ai==1.0.1
 
 # development dependencies
 black>=24.4.0

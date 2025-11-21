@@ -7,10 +7,10 @@ from app.admin.schemas import ApiTestRequest
 from app.core.settings import settings
 from app.core.db import get_db
 from app.utils.responses import error_response, success_response
-from fastapi import APIRouter, Depends, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, HTTPException, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text, inspect, Inspector
+from sqlalchemy import text
 
 router = APIRouter()
 
@@ -51,57 +51,58 @@ async def admin_dashboard(
     context["request"] = request
     # --- Fix: 注入 settings，供 base.html 使用 ---
     context["settings"] = settings
-    return templates.TemplateResponse(request, "dashboard.html", context)
+    return templates.TemplateResponse("dashboard.html", context)
 
 
 # --- Integrated Workbench Routes (Docs & DB) ---
 
-@router.get("/api/routes", response_class=HTMLResponse, summary="API 文档 (Integrated)")
-async def admin_api_docs_integrated(request: Request):
+@router.get("/api-docs", response_class=HTMLResponse, summary="API 文档 (Integrated)")
+async def admin_api_docs_page(request: Request):
     """Render the integrated API Docs page (Swagger UI)."""
     return templates.TemplateResponse(
         "api_docs.html",
-        {"request": request, "settings": settings}
+        {"request": request, "settings": settings},
     )
 
 
-@router.get("/db/schema", response_class=HTMLResponse, summary="DB 工作台")
-def admin_db_workbench(
+@router.get("/api/routes", summary="列出 API 路由")
+async def admin_api_routes(
     request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Render the DB Workbench with schema visualization.
-    Uses synchronous SQLAlchemy inspection.
-    """
-    try:
-        inspector: Inspector = inspect(db.connection())
-        table_names = inspector.get_table_names()
-        tables_data = []
-        for t_name in table_names:
-            columns = inspector.get_columns(t_name)
-            cols_display = [
-                {
-                    "name": c["name"],
-                    "type": str(c["type"]),
-                    "nullable": c.get("nullable", True),
-                    "pk": c.get("primary_key", False)
-                }
-                for c in columns
-            ]
-            tables_data.append({"name": t_name, "columns": cols_display})
-    except Exception as e:
-        tables_data = []
-        print(f"Error fetching schema: {e}")
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> dict:
+    routes = admin_service.get_api_routes(request.app)
+    return success_response({"routes": routes})
 
-    return templates.TemplateResponse(
-        "db_schema.html",
-        {
-            "request": request,
-            "settings": settings,
-            "tables": tables_data
-        }
-    )
+
+@router.get("/api/schemas", summary="列出 API Schemas")
+async def admin_api_schemas(
+    request: Request,
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> dict:
+    schemas = admin_service.get_api_schemas(request.app)
+    return success_response(schemas)
+
+
+@router.get("/db/schema", summary="数据库结构概览")
+async def admin_db_schema(
+    request: Request,
+    view: int | None = Query(default=None),
+    admin_service: AdminService = Depends(get_admin_service),
+) -> Response:
+    # HTML 视图禁用缓存，确保最新结构
+    data = await admin_service.get_db_schema_overview(use_cache=not bool(view))
+    if view:
+        tables_dict = data.get("tables", {}) or {}
+        tables = [
+            {"name": name, **details} for name, details in tables_dict.items()
+        ]
+        return templates.TemplateResponse(
+            "db_schema.html",
+            {"request": request, "settings": settings, "tables": tables},
+        )
+    return success_response(data)
 
 
 @router.post("/api/sql_test", summary="SQL 调试 (Restricted)")
@@ -140,6 +141,46 @@ def run_sql_test(
 
 
 # --- Existing Admin Service Routes ---
+
+@router.get("/checks")
+async def admin_checks(
+    admin_service: AdminService = Depends(get_admin_service),
+) -> dict:
+    checks = await admin_service.list_data_checks()
+    return success_response(checks)
+
+
+@router.get("/db/status")
+async def admin_db_status(
+    admin_service: AdminService = Depends(get_admin_service),
+) -> dict:
+    status = await admin_service.get_db_status()
+    return success_response(status)
+
+
+@router.get("/redis/status")
+async def admin_redis_status(
+    admin_service: AdminService = Depends(get_admin_service),
+) -> dict:
+    status = await admin_service.get_redis_status()
+    return success_response(status)
+
+
+@router.get("/db/health")
+async def admin_db_health(
+    admin_service: AdminService = Depends(get_admin_service),
+) -> dict:
+    status = await admin_service.get_db_health()
+    return success_response(status)
+
+
+@router.get("/trips/summary")
+async def admin_trip_summary(
+    admin_service: AdminService = Depends(get_admin_service),
+) -> dict:
+    summary = await admin_service.get_trip_summary()
+    return success_response(summary)
+
 
 @router.get("/api/summary")
 async def admin_api_summary(
@@ -195,7 +236,7 @@ async def admin_ai_console(
     # --- Fix: 注入 settings，供 base.html 使用 ---
     context["settings"] = settings
     
-    response = templates.TemplateResponse(request, "ai_console.html", context)
+    response = templates.TemplateResponse("ai_console.html", context)
     token = request.query_params.get("token")
     if token:
         response.set_cookie("admin_token", token, httponly=True, samesite="lax")
