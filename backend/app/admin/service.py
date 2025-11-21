@@ -16,15 +16,18 @@ from app.admin.schemas import (
     DataCheckResult,
 )
 from app.ai.metrics import get_ai_metrics
+from app.ai.prompts import get_prompt_registry
 from app.core.cache import cache_backend
-from app.core.db import check_db_health, get_engine
+from app.core.db import check_db_health, get_engine, session_scope
 from app.core.logging import get_logger
 from app.core.redis import check_redis_health
 from app.core.settings import settings
+from app.models.ai_schemas import PromptUpdatePayload
+from app.models.orm import ChatSession, Message
 from app.utils.http_client import perform_internal_request
 from app.utils.metrics import MetricsRegistry, get_metrics_registry
 from fastapi import FastAPI
-from sqlalchemy import inspect, text
+from sqlalchemy import func, inspect, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import SAWarning, SQLAlchemyError
@@ -219,18 +222,91 @@ class AdminService:
     def get_ai_summary(self) -> dict[str, Any]:
         return self._ai_metrics.snapshot()
 
+    def get_chat_summary(self) -> dict[str, Any]:
+        today = datetime.now(timezone.utc).date()
+        with session_scope() as session:
+            sessions_total = session.query(func.count(ChatSession.id)).scalar() or 0
+            sessions_today = (
+                session.query(func.count(ChatSession.id))
+                .filter(func.date(ChatSession.opened_at) == today)
+                .scalar()
+                or 0
+            )
+            messages_total = session.query(func.count(Message.id)).scalar() or 0
+            user_messages = (
+                session.query(func.count(Message.id))
+                .filter(Message.role == "user")
+                .scalar()
+                or 0
+            )
+            intent_rows = (
+                session.query(Message.intent, func.count(Message.intent))
+                .filter(Message.intent.isnot(None))
+                .group_by(Message.intent)
+                .all()
+            )
+        avg_turns = round(user_messages / sessions_total, 2) if sessions_total else 0.0
+        top_intents = [
+            {"intent": intent or "unknown", "count": int(count or 0)}
+            for intent, count in intent_rows
+        ]
+        return {
+            "sessions_total": int(sessions_total),
+            "sessions_today": int(sessions_today),
+            "messages_total": int(messages_total),
+            "avg_turns_per_session": avg_turns,
+            "top_intents": top_intents,
+        }
+
     def get_ai_console_context(self) -> dict[str, Any]:
+        recent_sessions = self._list_recent_sessions()
+        default_session = recent_sessions[0]["id"] if recent_sessions else None
         return {
             "summary": self.get_ai_summary(),
+            "recent_sessions": recent_sessions,
             "default_payload": {
-                "user_id": 1,
-                "trip_id": None,
-                "session_id": None,
-                "level": "user",
+                "user_id": recent_sessions[0]["user_id"] if recent_sessions else 1,
+                "trip_id": recent_sessions[0]["trip_id"] if recent_sessions else None,
+                "session_id": default_session,
                 "use_memory": True,
                 "return_memory": True,
+                "top_k_memory": settings.mem0_default_k,
             },
         }
+
+    def list_prompts(self):
+        registry = get_prompt_registry()
+        return registry.list_prompts()
+
+    def get_prompt_detail(self, key: str):
+        registry = get_prompt_registry()
+        return registry.get_prompt(key)
+
+    def update_prompt(self, key: str, payload: PromptUpdatePayload):
+        registry = get_prompt_registry()
+        return registry.update_prompt(key, payload)
+
+    def reset_prompt(self, key: str):
+        registry = get_prompt_registry()
+        return registry.reset_prompt(key)
+
+    def _list_recent_sessions(self, limit: int = 6) -> list[dict[str, Any]]:
+        with session_scope() as session:
+            rows = (
+                session.query(ChatSession)
+                .order_by(ChatSession.opened_at.desc())
+                .limit(limit)
+                .all()
+            )
+        return [
+            {
+                "id": row.id,
+                "user_id": row.user_id,
+                "trip_id": row.trip_id,
+                "opened_at": row.opened_at.isoformat(),
+            }
+            for row in rows
+        ]
 
     def get_api_routes(self, app: FastAPI) -> list[dict[str, Any]]:
         schema = app.openapi()

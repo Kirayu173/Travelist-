@@ -180,8 +180,7 @@ class RerankerFactory:
     """
 
     # Provider mappings with their config classes - only base config is kept
-    provider_to_class = {
-    }
+    provider_to_class = {}
 
     @classmethod
     def create(

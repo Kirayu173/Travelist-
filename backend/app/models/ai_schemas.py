@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
+from typing import Any, Literal
 
 from app.ai.memory_models import MemoryItem, MemoryLevel
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -49,3 +50,65 @@ class ChatDemoResult(BaseModel):
     used_memory: list[MemoryItem] = Field(default_factory=list)
     ai_meta: dict[str, Any]
     memory_record_id: str | None = None
+
+
+class ChatPayload(BaseModel):
+    user_id: int = Field(..., ge=1)
+    trip_id: int | None = Field(default=None, ge=1)
+    session_id: int | None = Field(default=None, ge=1)
+    query: str = Field(..., min_length=1, max_length=2000)
+    use_memory: bool = True
+    top_k_memory: int | None = Field(default=None, ge=1, le=20)
+    return_memory: bool = True
+    return_tool_traces: bool = True
+    return_messages: bool = True
+    stream: bool = False
+
+    @field_validator("query")
+    @classmethod
+    def strip_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            msg = "query must not be empty"
+            raise ValueError(msg)
+        return value
+
+
+class ChatMessageSchema(BaseModel):
+    role: Literal["user", "assistant", "system"]
+    content: str
+    created_at: datetime
+
+
+class ChatResult(BaseModel):
+    session_id: int
+    answer: str
+    intent: str | None = None
+    used_memory: list[MemoryItem] = Field(default_factory=list)
+    tool_traces: list[dict[str, Any]] = Field(default_factory=list)
+    ai_meta: dict[str, Any]
+    messages: list[ChatMessageSchema] = Field(default_factory=list)
+    memory_record_id: str | None = None
+
+
+class PromptSchema(BaseModel):
+    key: str
+    title: str
+    role: str
+    content: str
+    version: int
+    tags: list[str] = Field(default_factory=list)
+    is_active: bool
+    updated_at: datetime | None = None
+    updated_by: str | None = None
+    default_content: str | None = None
+
+
+class PromptUpdatePayload(BaseModel):
+    title: str | None = None
+    role: str | None = None
+    content: str | None = None
+    tags: list[str] | None = None
+    is_active: bool | None = None
+    reset_default: bool = False
+    updated_by: str | None = None

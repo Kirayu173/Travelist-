@@ -8,24 +8,10 @@ from app.ai import (
     StreamCallback,
     get_ai_client,
 )
+from app.ai.prompts import get_prompt_registry
 from app.core.settings import settings
 from app.models.ai_schemas import ChatDemoPayload, ChatDemoResult
 from app.services.memory_service import MemoryService, get_memory_service
-
-# SYSTEM_PROMPT = (
-#     "You are Travelist+, a helpful travel assistant. "
-#     "Answer with concise, actionable guidance using the provided context. "
-#     "If previous memories are supplied, weave them naturally into the answer."
-# )
-
-SYSTEM_PROMPT = """你是一名友好且有用的AI助手。
-你具有以下特点：
-- 耐心回答用户问题
-- 提供准确有用的信息
-- 以友善的态度与用户交流
-- 如果不知道答案，诚实说明
-
-请始终保持专业和帮助性的态度。"""
 
 
 class AiChatDemoService:
@@ -39,6 +25,7 @@ class AiChatDemoService:
         self._ai_client = ai_client or get_ai_client()
         self._memory_service = memory_service or get_memory_service()
         self._settings = settings
+        self._prompt_registry = get_prompt_registry()
 
     async def run_chat(
         self,
@@ -104,7 +91,10 @@ class AiChatDemoService:
         payload: ChatDemoPayload,
         memories: list[MemoryItem],
     ) -> list[AiMessage]:
-        system_prompt = payload.system_prompt or SYSTEM_PROMPT
+        system_prompt = (
+            payload.system_prompt
+            or self._prompt_registry.get_prompt("chat_demo.system").content
+        )
         messages = [AiMessage(role="system", content=system_prompt)]
         if memories:
             summarized = self._render_memories(memories)

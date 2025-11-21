@@ -187,3 +187,34 @@ def test_admin_db_schema_page_serves_html(client):
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "数据库结构视图" in resp.text
+
+
+def test_admin_chat_summary_requires_auth(client):
+    resp = client.get("/admin/chat/summary")
+    assert resp.status_code == 401
+
+
+def test_admin_chat_summary_counts_sessions(client):
+    payload = {"user_id": 55, "query": "测试多轮", "use_memory": False}
+    client.post("/api/ai/chat", json=payload)
+    resp = client.get("/admin/chat/summary", headers=_admin_headers())
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["sessions_total"] >= 1
+
+
+def test_admin_prompt_update_and_reset(client):
+    headers = _admin_headers()
+    list_resp = client.get("/admin/api/prompts", headers=headers)
+    assert list_resp.status_code == 200
+    prompts = list_resp.json()["data"]
+    key = prompts[0]["key"]
+    update_resp = client.put(
+        f"/admin/api/prompts/{key}",
+        headers=headers,
+        json={"content": "test content", "updated_by": "pytest"},
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["data"]["content"] == "test content"
+    reset_resp = client.post(f"/admin/api/prompts/{key}/reset", headers=headers)
+    assert reset_resp.status_code == 200

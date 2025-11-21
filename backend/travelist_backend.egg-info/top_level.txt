@@ -1,2 +1,5 @@
 app
+logs
+mem0
+migrations
 tests

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}提示词管理 - Travelist+ Admin{% endblock %}
+{% block header %}提示词管理{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div>
+            <div class="text-sm font-semibold text-slate-800">Prompt Registry</div>
+            <p class="text-xs text-slate-500">所有提示词统一在此管理，保存后立即生效</p>
+        </div>
+        <span class="text-[10px] uppercase tracking-widest text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded">Stage 5</span>
+    </div>
+
+    <div class="grid grid-cols-12">
+        <div class="col-span-4 border-r border-slate-200 max-h-[70vh] overflow-y-auto">
+            <div id="promptList" class="divide-y divide-slate-100">
+                {% for prompt in prompts %}
+                <button data-key="{{ prompt.key }}" class="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors prompt-item">
+                    <div class="text-sm font-semibold text-slate-800">{{ prompt.title }}</div>
+                    <div class="text-[11px] text-slate-500 font-mono">{{ prompt.key }}</div>
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="col-span-8 p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm font-semibold text-slate-800" id="promptTitle">选择左侧提示词</div>
+                    <p class="text-xs text-slate-500" id="promptMeta">-</p>
+                </div>
+                <div class="space-x-2">
+                    <button id="resetBtn" class="px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600" disabled>恢复默认</button>
+                    <button id="saveBtn" class="px-4 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" disabled>保存</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <label class="text-xs text-slate-500">角色
+                    <input id="promptRole" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="system/user/assistant">
+                </label>
+                <label class="text-xs text-slate-500">标签（逗号分隔）
+                    <input id="promptTags" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="intent,trip">
+                </label>
+            </div>
+
+            <label class="text-xs text-slate-500 block">内容
+                <textarea id="promptContent" class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-3 text-sm h-64 resize-none" placeholder="提示词内容"></textarea>
+            </label>
+            <div class="text-[11px] text-slate-400">更新人：<span id="promptUpdater">-</span> · 版本：<span id="promptVersion">-</span></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = (document.cookie.match(/admin_token=([^;]+)/)||[])[1] || "";
+const list = document.getElementById("promptList");
+const saveBtn = document.getElementById("saveBtn");
+const resetBtn = document.getElementById("resetBtn");
+let currentKey = null;
+
+function headers() {
+    return token ? {"X-Admin-Token": token, "Content-Type": "application/json"} : {"Content-Type": "application/json"};
+}
+
+async function loadPrompt(key) {
+    currentKey = key;
+    saveBtn.disabled = false;
+    resetBtn.disabled = false;
+    const resp = await fetch(`/admin/api/prompts/${key}`, {headers: headers()});
+    const { data } = await resp.json();
+    document.getElementById("promptTitle").innerText = data.title;
+    document.getElementById("promptMeta").innerText = `key=${data.key} · role=${data.role}`;
+    document.getElementById("promptRole").value = data.role || "";
+    document.getElementById("promptTags").value = (data.tags || []).join(",");
+    document.getElementById("promptContent").value = data.content || "";
+    document.getElementById("promptUpdater").innerText = data.updated_by || "系统默认";
+    document.getElementById("promptVersion").innerText = data.version;
+}
+
+async function savePrompt() {
+    if (!currentKey) return;
+    saveBtn.disabled = true;
+    const payload = {
+        role: document.getElementById("promptRole").value || "system",
+        tags: document.getElementById("promptTags").value.split(",").map(t => t.trim()).filter(Boolean),
+        content: document.getElementById("promptContent").value,
+    };
+    const resp = await fetch(`/admin/api/prompts/${currentKey}`, {
+        method: "PUT",
+        headers: headers(),
+        body: JSON.stringify(payload)
+    });
+    if (resp.ok) {
+        const { data } = await resp.json();
+        document.getElementById("promptVersion").innerText = data.version;
+        document.getElementById("promptUpdater").innerText = data.updated_by || "Manual";
+        alert("保存成功");
+    } else {
+        alert("保存失败");
+    }
+    saveBtn.disabled = false;
+}
+
+async function resetPrompt() {
+    if (!currentKey) return;
+    const resp = await fetch(`/admin/api/prompts/${currentKey}/reset`, {
+        method: "POST",
+        headers: headers()
+    });
+    if (resp.ok) {
+        const { data } = await resp.json();
+        document.getElementById("promptContent").value = data.default_content || data.content;
+        document.getElementById("promptVersion").innerText = data.version;
+        document.getElementById("promptUpdater").innerText = data.updated_by || "系统默认";
+        alert("已恢复默认");
+    }
+}
+
+list.addEventListener("click", (e) => {
+    const btn = e.target.closest(".prompt-item");
+    if (!btn) return;
+    list.querySelectorAll(".prompt-item").forEach(el => el.classList.remove("bg-slate-100"));
+    btn.classList.add("bg-slate-100");
+    loadPrompt(btn.dataset.key);
+});
+
+saveBtn.addEventListener("click", savePrompt);
+resetBtn.addEventListener("click", resetPrompt);
+</script>
+{% endblock %}

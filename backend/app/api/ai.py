@@ -5,8 +5,9 @@ import json
 from contextlib import suppress
 
 from app.ai import AiClientError, AiStreamChunk
-from app.models.ai_schemas import ChatDemoPayload
+from app.models.ai_schemas import ChatDemoPayload, ChatPayload
 from app.services.ai_chat_service import AiChatDemoService, get_ai_chat_service
+from app.services.assistant_service import AssistantService, get_assistant_service
 from app.utils.responses import error_response, success_response
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -14,17 +15,21 @@ from fastapi.responses import JSONResponse, StreamingResponse
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
-def _service() -> AiChatDemoService:
+def _demo_service() -> AiChatDemoService:
     return get_ai_chat_service()
+
+
+def _assistant_service() -> AssistantService:
+    return get_assistant_service()
 
 
 @router.post(
     "/chat_demo",
     summary="AI 问答演示",
-    description="串联 AiClient 与 mem0，演示上下文增强与记忆写入�?",
+    description="串联 AiClient 与 mem0，演示上下文增强与记忆写入。",
 )
 async def chat_demo(payload: ChatDemoPayload):
-    service = _service()
+    service = _demo_service()
     if payload.stream:
         return await _stream_chat(service, payload)
 
@@ -35,6 +40,30 @@ async def chat_demo(payload: ChatDemoPayload):
         return JSONResponse(
             status_code=502,
             content=error_response("AI 调用失败", code=3001, data=data),
+        )
+    return success_response(result.model_dump(mode="json"))
+
+
+@router.post(
+    "/chat",
+    summary="智能助手（多轮，对接 LangGraph）",
+    description="支持 session_id 的多轮对话，行程查询与记忆读写，支持流式输出。",
+)
+async def chat(payload: ChatPayload):
+    service = _assistant_service()
+    if payload.stream:
+        return await _stream_assistant(service, payload)
+    try:
+        result = await service.run_chat(payload)
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content=error_response(str(exc), code=14030),
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        return JSONResponse(
+            status_code=502,
+            content=error_response("AI 调用失败", code=3001, data={"error": str(exc)}),
         )
     return success_response(result.model_dump(mode="json"))
 
@@ -76,6 +105,76 @@ async def _stream_chat(
                         "error_type": exc.type,
                         "message": exc.message,
                         "trace_id": exc.trace_id,
+                    }
+                )
+            )
+        finally:
+            await queue.put("data: [DONE]\n\n")
+
+    producer_task = asyncio.create_task(producer())
+
+    async def event_stream():
+        try:
+            while True:
+                chunk = await queue.get()
+                yield chunk
+                if chunk.strip().endswith("[DONE]"):
+                    break
+        finally:
+            if not producer_task.done():
+                producer_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await producer_task
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+async def _stream_assistant(
+    service: AssistantService,
+    payload: ChatPayload,
+) -> StreamingResponse:
+    queue: asyncio.Queue[str] = asyncio.Queue()
+
+    async def on_chunk(chunk: AiStreamChunk) -> None:
+        if not chunk.delta and not chunk.done:
+            return
+        event = {
+            "event": "chunk",
+            "trace_id": chunk.trace_id,
+            "index": chunk.index,
+            "delta": chunk.delta,
+            "done": chunk.done,
+        }
+        await queue.put(_format_sse(event))
+
+    async def producer() -> None:
+        try:
+            result = await service.run_chat(payload, stream_handler=on_chunk)
+            await queue.put(
+                _format_sse(
+                    {
+                        "event": "result",
+                        "payload": result.model_dump(mode="json"),
+                    }
+                )
+            )
+        except ValueError as exc:
+            await queue.put(
+                _format_sse(
+                    {
+                        "event": "error",
+                        "error_type": "bad_request",
+                        "message": str(exc),
+                    }
+                )
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            await queue.put(
+                _format_sse(
+                    {
+                        "event": "error",
+                        "error_type": exc.__class__.__name__,
+                        "message": "AI 调用失败",
                     }
                 )
             )

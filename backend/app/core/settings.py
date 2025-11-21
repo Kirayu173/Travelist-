@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     mem0_llm_provider: str = "ollama"
     mem0_llm_model: str | None = None
     mem0_llm_base_url: str | None = None
+    ai_assistant_graph_enabled: bool = True
+    ai_assistant_max_history_rounds: int = 6
+    ai_prompt_cache_ttl: int = 60
+    ai_prompt_edit_in_prod: bool = False
 
     jwt_secret: str = "change_me"
     jwt_alg: str = "HS256"

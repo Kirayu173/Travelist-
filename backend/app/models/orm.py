@@ -261,6 +261,97 @@ class Favorite(Base):
     poi: Mapped["Poi"] = relationship(back_populates="favorites")
 
 
+class AiPrompt(TimestampMixin, Base):
+    __tablename__ = "ai_prompts"
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_TYPE,
+        primary_key=True,
+        autoincrement=True,
+    )
+    key: Mapped[str] = mapped_column(
+        sa.String(128),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    role: Mapped[str] = mapped_column(sa.String(32), default="system")
+    content: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    version: Mapped[int] = mapped_column(
+        sa.Integer,
+        nullable=False,
+        default=1,
+        server_default=sa.text("1"),
+    )
+    tags: Mapped[list[str]] = mapped_column(JSONType, default=list)
+    is_active: Mapped[bool] = mapped_column(
+        sa.Boolean,
+        nullable=False,
+        default=True,
+        server_default=sa.text("true"),
+    )
+    updated_by: Mapped[str | None] = mapped_column(sa.String(128), nullable=True)
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_TYPE,
+        primary_key=True,
+        autoincrement=True,
+    )
+    user_id: Mapped[int] = mapped_column(BIGINT_TYPE, nullable=False, index=True)
+    trip_id: Mapped[int | None] = mapped_column(BIGINT_TYPE, nullable=True, index=True)
+    opened_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=True,
+    )
+    meta: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict)
+
+    messages: Mapped[list["Message"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at",
+    )
+
+
+class Message(Base):
+    __tablename__ = "messages"
+    __table_args__ = (
+        sa.Index("ix_messages_session_created", "session_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_TYPE,
+        primary_key=True,
+        autoincrement=True,
+    )
+    session_id: Mapped[int] = mapped_column(
+        BIGINT_TYPE,
+        sa.ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(sa.String(16), nullable=False)
+    content: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    intent: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
+    tokens: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    meta: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+
+    session: Mapped["ChatSession"] = relationship(back_populates="messages")
+
+
 __all__ = [
     "User",
     "Trip",
@@ -269,4 +360,7 @@ __all__ = [
     "Poi",
     "Favorite",
     "TransportMode",
+    "AiPrompt",
+    "ChatSession",
+    "Message",
 ]

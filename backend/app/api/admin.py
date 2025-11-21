@@ -1,16 +1,19 @@
+from __future__ import annotations
+
+# ruff: noqa: B008
 from datetime import datetime, timezone
-from typing import Any
 
 from app.admin import AdminService, get_admin_service, templates
 from app.admin.auth import AdminAuthError, verify_admin_access
 from app.admin.schemas import ApiTestRequest
-from app.core.settings import settings
 from app.core.db import get_db
+from app.core.settings import settings
+from app.models.ai_schemas import PromptUpdatePayload
 from app.utils.responses import error_response, success_response
-from fastapi import APIRouter, Depends, Query, Request, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -56,6 +59,7 @@ async def admin_dashboard(
 
 # --- Integrated Workbench Routes (Docs & DB) ---
 
+
 @router.get("/api-docs", response_class=HTMLResponse, summary="API 文档 (Integrated)")
 async def admin_api_docs_page(request: Request):
     """Render the integrated API Docs page (Swagger UI)."""
@@ -95,9 +99,7 @@ async def admin_db_schema(
     data = await admin_service.get_db_schema_overview(use_cache=not bool(view))
     if view:
         tables_dict = data.get("tables", {}) or {}
-        tables = [
-            {"name": name, **details} for name, details in tables_dict.items()
-        ]
+        tables = [{"name": name, **details} for name, details in tables_dict.items()]
         return templates.TemplateResponse(
             "db_schema.html",
             {"request": request, "settings": settings, "tables": tables},
@@ -107,9 +109,7 @@ async def admin_db_schema(
 
 @router.post("/api/sql_test", summary="SQL 调试 (Restricted)")
 def run_sql_test(
-    payload: dict[str, str],
-    request: Request,
-    db: Session = Depends(get_db)
+    payload: dict[str, str], request: Request, db: Session = Depends(get_db)
 ):
     """
     Execute a raw SQL query for debugging (RESTRICTED).
@@ -118,7 +118,7 @@ def run_sql_test(
     query = payload.get("query", "").strip()
     if not query:
         return success_response({"error": "Empty query"})
-    
+
     if not query.lower().startswith("select"):
         raise HTTPException(400, "Only SELECT queries are allowed in this console.")
 
@@ -127,20 +127,23 @@ def run_sql_test(
         result = db.execute(text(query))
         keys = list(result.keys())
         rows = result.fetchall()
-        
+
         # Convert rows to dicts
-        data = [dict(zip(keys, row)) for row in rows]
-        
-        return success_response({
-            "columns": keys,
-            "rows": data[:100], # Limit to 100 rows
-            "count": len(data)
-        })
+        data = [dict(zip(keys, row, strict=False)) for row in rows]
+
+        return success_response(
+            {
+                "columns": keys,
+                "rows": data[:100],  # Limit to 100 rows
+                "count": len(data),
+            }
+        )
     except Exception as e:
         return success_response({"error": str(e)})
 
 
 # --- Existing Admin Service Routes ---
+
 
 @router.get("/checks")
 async def admin_checks(
@@ -212,7 +215,9 @@ async def admin_api_test(
             payload, request.app, str(request.base_url)
         )
     except ValueError as exc:
-        return JSONResponse(status_code=400, content=error_response(str(exc), code=14020))
+        return JSONResponse(
+            status_code=400, content=error_response(str(exc), code=14020)
+        )
     return success_response(result)
 
 
@@ -225,6 +230,60 @@ def admin_ai_summary_data(
     return success_response(summary)
 
 
+@router.get("/chat/summary")
+def admin_chat_summary_data(
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> dict:
+    summary = admin_service.get_chat_summary()
+    return success_response(summary)
+
+
+@router.get("/api/prompts")
+async def admin_prompt_list(
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+):
+    prompts = admin_service.list_prompts()
+    return success_response([item.model_dump(mode="json") for item in prompts])
+
+
+@router.get("/api/prompts/{key}")
+async def admin_prompt_detail(
+    key: str,
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+):
+    try:
+        prompt = admin_service.get_prompt_detail(key)
+    except KeyError:
+        return JSONResponse(
+            status_code=404, content=error_response("Prompt 不存在", code=24004)
+        )
+    return success_response(prompt.model_dump(mode="json"))
+
+
+@router.put("/api/prompts/{key}")
+async def admin_prompt_update(
+    key: str,
+    payload: PromptUpdatePayload,
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+):
+    updated = admin_service.update_prompt(key, payload)
+    return success_response(updated.model_dump(mode="json"))
+
+
+@router.post("/api/prompts/{key}/reset")
+async def admin_prompt_reset(
+    key: str,
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+):
+    prompt = admin_service.reset_prompt(key)
+    return success_response(prompt.model_dump(mode="json"))
+
+
 @router.get("/ai/console", response_class=HTMLResponse)
 async def admin_ai_console(
     request: Request,
@@ -235,7 +294,7 @@ async def admin_ai_console(
     context["request"] = request
     # --- Fix: 注入 settings，供 base.html 使用 ---
     context["settings"] = settings
-    
+
     response = templates.TemplateResponse("ai_console.html", context)
     token = request.query_params.get("token")
     if token:
@@ -243,13 +302,35 @@ async def admin_ai_console(
     return response
 
 
+@router.get("/ai/prompts", response_class=HTMLResponse)
+async def admin_ai_prompts(
+    request: Request,
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> HTMLResponse:
+    context = {
+        "request": request,
+        "settings": settings,
+        "prompts": [p.model_dump(mode="json") for p in admin_service.list_prompts()],
+    }
+    response = templates.TemplateResponse("ai_prompts.html", context)
+    token = request.query_params.get("token")
+    if token:
+        response.set_cookie("admin_token", token, httponly=True, samesite="lax")
+    return response
+
+
 @router.get("/health")
-async def admin_health(admin_service: AdminService = Depends(get_admin_service)) -> dict:
+async def admin_health(
+    admin_service: AdminService = Depends(get_admin_service),
+) -> dict:
     health = await admin_service.get_health_summary()
     return success_response(health)
 
 
 @router.get("/db/stats")
-async def admin_db_stats(admin_service: AdminService = Depends(get_admin_service)) -> dict:
+async def admin_db_stats(
+    admin_service: AdminService = Depends(get_admin_service),
+) -> dict:
     stats = await admin_service.get_db_stats()
     return success_response(stats)
