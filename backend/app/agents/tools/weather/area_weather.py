@@ -2,18 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
+from app.agents.tools.common.config_utils import get_key, load_env
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from langchain_core.tools.structured import StructuredTool
 from pydantic import BaseModel, Field, field_validator
-
-# 添加项目根目录到Python路径
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent.parent))
-from toolkit.config_utils import load_env, get_key
 
 logger = get_tool_logger("area_weather")
 
