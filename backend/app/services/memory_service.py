@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from time import monotonic
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -20,24 +21,44 @@ class _LocalMemory:
     id: str
     text: str
     metadata: dict[str, Any]
+    created_at: float
 
 
 class _InMemoryStore:
     """Fallback storage when mem0 is not available."""
 
-    def __init__(self) -> None:
-        self._store: dict[str, list[_LocalMemory]] = defaultdict(list)
+    def __init__(
+        self,
+        *,
+        ttl_seconds: int,
+        max_entries_per_namespace: int,
+        max_total_entries: int,
+    ) -> None:
+        self._store: dict[str, deque[_LocalMemory]] = defaultdict(deque)
         self._lock = RLock()
+        self._ttl_seconds = max(ttl_seconds, 1)
+        self._max_entries_per_namespace = max(max_entries_per_namespace, 1)
+        self._max_total_entries = max(max_total_entries, 1)
 
     def write(self, namespace: str, text: str, metadata: dict[str, Any]) -> str:
         record_id = f"local-{uuid4().hex}"
-        entry = _LocalMemory(id=record_id, text=text, metadata=dict(metadata))
+        entry = _LocalMemory(
+            id=record_id,
+            text=text,
+            metadata=dict(metadata),
+            created_at=monotonic(),
+        )
         with self._lock:
-            self._store[namespace].append(entry)
+            self._prune_namespace(namespace)
+            bucket = self._store[namespace]
+            bucket.append(entry)
+            self._enforce_limits(bucket)
+            self._enforce_global_limit()
         return record_id
 
     def search(self, namespace: str, query: str, k: int) -> list[MemoryItem]:
         with self._lock:
+            self._prune_namespace(namespace)
             entries = list(self._store.get(namespace, []))
         scored: list[tuple[float, _LocalMemory]] = []
         for entry in entries:
@@ -56,6 +77,48 @@ class _InMemoryStore:
             )
         return payload
 
+    def clear(self) -> None:
+        with self._lock:
+            self._store.clear()
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            namespaces = len(self._store)
+            total_entries = sum(len(bucket) for bucket in self._store.values())
+        return {
+            "namespaces": namespaces,
+            "total_entries": total_entries,
+            "max_entries_per_namespace": self._max_entries_per_namespace,
+            "max_total_entries": self._max_total_entries,
+        }
+
+    def _prune_namespace(self, namespace: str) -> None:
+        bucket = self._store.get(namespace)
+        if not bucket:
+            return
+        now = monotonic()
+        ttl_threshold = now - self._ttl_seconds
+        while bucket and bucket[0].created_at < ttl_threshold:
+            bucket.popleft()
+        self._enforce_limits(bucket)
+
+    def _enforce_limits(self, bucket: deque[_LocalMemory]) -> None:
+        while len(bucket) > self._max_entries_per_namespace:
+            bucket.popleft()
+
+    def _enforce_global_limit(self) -> None:
+        total_entries = sum(len(bucket) for bucket in self._store.values())
+        if total_entries <= self._max_total_entries:
+            return
+        # Drop oldest across namespaces by simple round-robin
+        while total_entries > self._max_total_entries:
+            for namespace, bucket in list(self._store.items()):
+                if bucket:
+                    bucket.popleft()
+                    total_entries -= 1
+                if total_entries <= self._max_total_entries:
+                    break
+
     @staticmethod
     def _score(text: str, query: str) -> float:
         if not text:
@@ -73,9 +136,14 @@ class MemoryService:
         self._metrics = metrics or get_ai_metrics()
         self._settings = settings
         self._logger = get_logger(__name__)
-        self._local_store = _InMemoryStore()
+        self._local_store = _InMemoryStore(
+            ttl_seconds=self._settings.mem0_fallback_ttl_seconds,
+            max_entries_per_namespace=self._settings.mem0_fallback_max_entries_per_ns,
+            max_total_entries=self._settings.mem0_fallback_max_total_entries,
+        )
         self._engine: LocalMemoryEngine | None = None
         self._engine_error: str | None = None
+        self._engine_ready = False
         self._try_init_engine()
 
     async def write_memory(
@@ -96,6 +164,7 @@ class MemoryService:
         )
         merged_meta = {**base_metadata, **(metadata or {})}
         local_id = self._local_store.write(namespace, text, merged_meta)
+        self._report_fallback_stats()
 
         if not self._ensure_engine_ready():
             self._metrics.record_mem0_call(
@@ -126,6 +195,7 @@ class MemoryService:
                 success=False,
                 error_type=exc.__class__.__name__,
             )
+            self._report_fallback_stats()
             return local_id
 
     async def search_memory(
@@ -146,6 +216,7 @@ class MemoryService:
         )
         limit = k or self._settings.mem0_default_k or 5
         fallback = self._local_store.search(namespace, query, limit)
+        self._report_fallback_stats()
 
         if not self._ensure_engine_ready():
             self._metrics.record_mem0_call(
@@ -177,6 +248,7 @@ class MemoryService:
                 success=False,
                 error_type=exc.__class__.__name__,
             )
+            self._report_fallback_stats()
             return fallback
 
     @staticmethod
@@ -226,10 +298,15 @@ class MemoryService:
         if self._settings.mem0_mode != "local":
             self._engine = None
             self._engine_error = "disabled"
+            self._engine_ready = False
             return
         try:
             self._engine = get_local_memory_engine()
             self._engine_error = None
+            if not self._engine_ready:
+                self._local_store.clear()
+                self._report_fallback_stats()
+            self._engine_ready = True
         except Exception as exc:  # pragma: no cover - initialization failure
             self._logger.warning(
                 "mem0.engine_init_failed",
@@ -237,6 +314,7 @@ class MemoryService:
             )
             self._engine = None
             self._engine_error = exc.__class__.__name__
+            self._engine_ready = False
 
     def _ensure_engine_ready(self) -> bool:
         if self._engine is not None:
@@ -245,6 +323,15 @@ class MemoryService:
             return False
         self._try_init_engine()
         return self._engine is not None
+
+    def _report_fallback_stats(self) -> None:
+        stats = self._local_store.stats()
+        self._metrics.update_mem0_fallback(
+            namespaces=stats["namespaces"],
+            total_entries=stats["total_entries"],
+            max_entries_per_namespace=stats["max_entries_per_namespace"],
+            max_total_entries=stats["max_total_entries"],
+        )
 
 
 _memory_service: MemoryService | None = None

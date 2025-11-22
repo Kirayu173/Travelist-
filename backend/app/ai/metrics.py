@@ -41,6 +41,12 @@ class AiMetrics:
         self._mem0_calls = 0
         self._mem0_errors = 0
         self._mem0_history: deque[Mem0Entry] = deque(maxlen=history_limit)
+        self._mem0_fallback: dict[str, int] = {
+            "namespaces": 0,
+            "total_entries": 0,
+            "max_entries_per_namespace": 0,
+            "max_total_entries": 0,
+        }
         self._lock = Lock()
 
     def record_ai_call(
@@ -93,6 +99,22 @@ class AiMetrics:
             )
             self._mem0_history.appendleft(entry)
 
+    def update_mem0_fallback(
+        self,
+        *,
+        namespaces: int,
+        total_entries: int,
+        max_entries_per_namespace: int,
+        max_total_entries: int,
+    ) -> None:
+        with self._lock:
+            self._mem0_fallback = {
+                "namespaces": namespaces,
+                "total_entries": total_entries,
+                "max_entries_per_namespace": max_entries_per_namespace,
+                "max_total_entries": max_total_entries,
+            }
+
     def snapshot(self) -> dict:
         with self._lock:
             avg_latency = (
@@ -121,6 +143,7 @@ class AiMetrics:
                 "mem0_recent": [
                     self._format_mem0(entry) for entry in list(self._mem0_history)
                 ],
+                "mem0_fallback_store": dict(self._mem0_fallback),
             }
 
     @staticmethod

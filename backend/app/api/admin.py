@@ -54,7 +54,7 @@ async def admin_dashboard(
     context["request"] = request
     # --- Fix: 注入 settings，供 base.html 使用 ---
     context["settings"] = settings
-    return templates.TemplateResponse("dashboard.html", context)
+    return templates.TemplateResponse(request, "dashboard.html", context)
 
 
 # --- Integrated Workbench Routes (Docs & DB) ---
@@ -68,6 +68,12 @@ async def admin_api_docs_page(request: Request):
         "api_docs.html",
         {"request": request, "settings": settings},
     )
+
+
+@router.get("/favicon.ico")
+async def admin_favicon() -> Response:
+    """Return empty favicon to avoid 404 spam in logs."""
+    return Response(status_code=204)
 
 
 @router.get("/api/routes", summary="列出 API 路由")
@@ -183,7 +189,7 @@ async def admin_db_health(
 async def admin_trip_summary(
     admin_service: AdminService = Depends(get_admin_service),
 ) -> dict:
-    summary = await admin_service.get_trip_summary()
+    summary = await admin_service.get_trip_summary(use_cache=False)
     return success_response(summary)
 
 

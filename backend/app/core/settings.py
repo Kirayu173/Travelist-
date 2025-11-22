@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     ai_assistant_max_history_rounds: int = 6
     ai_prompt_cache_ttl: int = 60
     ai_prompt_edit_in_prod: bool = False
+    mem0_fallback_ttl_seconds: int = 1800
+    mem0_fallback_max_entries_per_ns: int = 500
+    mem0_fallback_max_total_entries: int = 5000
 
     jwt_secret: str = "change_me"
     jwt_alg: str = "HS256"
