@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from app.agents.tools.common.logging import tool_logger
+from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from langchain_core.tools.structured import StructuredTool
+from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
-logger = tool_logger("fast_search")
+logger = get_tool_logger("fast_search")
 
 
 class FastSearchInput(BaseModel):
@@ -15,17 +16,18 @@ class FastSearchInput(BaseModel):
         default="week",
         description="时间范围，可选 day/week/month/year，仅用于提示",
     )
+    max_results: int = Field(default=5, ge=1, le=10, description="最大返回条数")
 
 
 class FastSearchTool(StructuredTool):
-    """Quick, offline-friendly search stub."""
+    """基于 Tavily 的快速事实搜索。"""
 
     def __init__(self, **kwargs):
         super().__init__(
             func=self._run,
             coroutine=self._arun,
             name="fast_search",
-            description="快速事实搜索（本地模拟），返回摘要与若干来源链接。",
+            description="快速事实搜索（Tavily），返回摘要与若干来源链接。",
             args_schema=FastSearchInput,
             return_direct=False,
             handle_tool_error=True,
@@ -36,21 +38,61 @@ class FastSearchTool(StructuredTool):
         try:
             payload = FastSearchInput(**kwargs)
         except Exception as exc:
+            log_tool_event(
+                "fast_search",
+                event="invoke",
+                status="invalid_args",
+                request=kwargs,
+                error_code="invalid_params",
+                message=str(exc),
+            )
             return {"error": f"参数错误: {exc}"}
 
-        summary = (
-            f"针对“{payload.query}”的快速搜索摘要（时间范围: {payload.time_range}）。"
-            "这是基于缓存语料的模拟结果，可用于为 LLM 提供上下文。"
-        )
-        results = [
-            {
-                "title": f"{payload.query} - 参考 {idx+1}",
-                "snippet": f"与“{payload.query}”相关的要点摘要示例 {idx+1}。",
-                "url": f"https://example.com/search/{idx+1}",
+        try:
+            tavily = TavilySearch(
+                max_results=payload.max_results,
+                include_answer=True,
+                search_depth="basic",
+            )
+            results = tavily.invoke(
+                {"query": payload.query, "time_range": payload.time_range}
+            )
+            summary = results.get("answer") or "未获取直接答案，请参考下方结果。"
+            formatted = [
+                {
+                    "title": item.get("title", ""),
+                    "summary": item.get("content", ""),
+                    "url": item.get("url", ""),
+                    "score": item.get("score"),
+                }
+                for item in results.get("results", [])[:5]
+            ]
+            response = {
+                "query": payload.query,
+                "summary": summary,
+                "results": formatted,
+                "raw": results,
             }
-            for idx in range(3)
-        ]
-        return {"query": payload.query, "summary": summary, "results": results}
+            log_tool_event(
+                "fast_search",
+                event="invoke",
+                status="ok",
+                request=kwargs,
+                response=results,
+                raw_input=kwargs,
+                output=response,
+            )
+            return response
+        except Exception as exc:
+            log_tool_event(
+                "fast_search",
+                event="invoke",
+                status="error",
+                request=kwargs,
+                error_code="tavily_error",
+                message=str(exc),
+            )
+            return {"error": f"搜索失败: {exc}"}
 
     async def _arun(self, **kwargs) -> Dict[str, Any]:
         return self._run(**kwargs)

@@ -26,6 +26,7 @@ class RegisteredTool:
     runner: Runner
     category: str | None = None
     source: str | None = None
+    obj: Any | None = None
 
     async def invoke(self, payload: dict[str, Any]) -> Any:
         kwargs = self._validate_payload(payload)
@@ -81,6 +82,7 @@ class ToolRegistry:
             runner=runner,
             category=category,
             source=source,
+            obj=tool_obj,
         )
         self._tools[name] = registered
         self._logger.info(

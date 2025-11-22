@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
-from app.agents.tools.common.logging import tool_logger
+from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from langchain_core.tools.structured import StructuredTool
+from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
-logger = tool_logger("weather_search")
+logger = get_tool_logger("weather_search")
 
 
 class WeatherSearchInput(BaseModel):
@@ -16,49 +18,99 @@ class WeatherSearchInput(BaseModel):
 
 
 class WeatherSearchTool(StructuredTool):
-    """Generate a lightweight weather summary without external API calls."""
+    """基于 Tavily 的天气查询，返回摘要与引用链接。"""
 
     def __init__(self, **kwargs):
         super().__init__(
             func=self._run,
             coroutine=self._arun,
             name="weather_search",
-            description="根据地点和月份生成天气概览（温度、降雨概率、简要建议），无需外部 API。",
+            description="使用 Tavily 搜索指定地点和月份的天气摘要，返回引用链接。",
             args_schema=WeatherSearchInput,
             return_direct=False,
             handle_tool_error=True,
             **kwargs,
         )
+        # Validate Tavily API key on init
+        try:
+            TavilySearch()
+        except Exception:
+            # defer key errors to runtime
+            pass
+
+    def _build_query(self, destination: str, month: str) -> str:
+        return (
+            f"{destination} {month} 的历史或典型气温、降雨量和气候特征，"
+            "给出总体天气概况与出行建议。"
+        )
+
+    def _process_results(self, results: Dict[str, Any]) -> tuple[str, List[Dict[str, Any]]]:
+        if results.get("answer"):
+            summary = results["answer"]
+        else:
+            summary = "未获取直接答案，以下为搜索摘要：\n"
+            for i, item in enumerate(results.get("results", [])[:3], 1):
+                summary += f"{i}. {item.get('title', '')}: {item.get('content', '')[:150]}...\n"
+        web_results = []
+        for item in results.get("results", [])[:5]:
+            web_results.append(
+                {
+                    "title": item.get("title", ""),
+                    "link": item.get("url", ""),
+                    "snippet": (item.get("content") or "")[:200],
+                }
+            )
+        return summary, web_results
 
     def _run(self, **kwargs) -> Dict[str, Any]:
         try:
             payload = WeatherSearchInput(**kwargs)
         except Exception as exc:
+            log_tool_event(
+                "weather_search",
+                event="invoke",
+                status="invalid_args",
+                request=kwargs,
+                error_code="invalid_params",
+                message=str(exc),
+            )
             return {"error": f"参数错误: {exc}"}
 
-        summary = (
-            f"{payload.destination} 在 {payload.month} 的典型天气："
-            "温度温和，注意携带基础出行装备。"
-        )
-        results: List[Dict[str, Any]] = []
-        for idx in range(payload.max_results or 3):
-            results.append(
-                {
-                    "title": f"{payload.destination} 天气参考 #{idx + 1}",
-                    "snippet": "温度区间约在 10℃-25℃，早晚温差适中，建议分层穿着。",
-                    "link": f"https://example.com/weather/{payload.destination}/{payload.month}/{idx+1}",
-                }
+        try:
+            query = self._build_query(payload.destination, payload.month)
+            tavily = TavilySearch(max_results=payload.max_results or 5, include_answer=True)
+            results = tavily.invoke({"query": query})
+            summary, web_results = self._process_results(results)
+            response = {
+                "weather_summary": summary,
+                "destination": payload.destination,
+                "month": payload.month,
+                "web_results": web_results,
+                "raw": results,
+            }
+            log_tool_event(
+                "weather_search",
+                event="invoke",
+                status="ok",
+                request=kwargs,
+                response=results,
+                raw_input=kwargs,
+                output=response,
             )
-
-        return {
-            "weather_summary": summary,
-            "destination": payload.destination,
-            "month": payload.month,
-            "web_results": results,
-        }
+            return response
+        except Exception as exc:
+            log_tool_event(
+                "weather_search",
+                event="invoke",
+                status="error",
+                request=kwargs,
+                error_code="tavily_error",
+                message=str(exc),
+            )
+            return {"error": f"搜索失败: {exc}"}
 
     async def _arun(self, **kwargs) -> Dict[str, Any]:
-        return self._run(**kwargs)
+        return await asyncio.to_thread(self._run, **kwargs)
 
 
 def create_tool() -> WeatherSearchTool:

@@ -3,11 +3,11 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Any, Dict, Optional
 
-from app.agents.tools.common.logging import tool_logger
+from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from langchain_core.tools.structured import StructuredTool
 from pydantic import BaseModel, Field
 
-logger = tool_logger("current_time")
+logger = get_tool_logger("current_time")
 
 
 class CurrentTimeInput(BaseModel):
@@ -41,9 +41,26 @@ class CurrentTimeTool(StructuredTool):
             timezone_str = kwargs.get("timezone")
             fmt = kwargs.get("format") or "%Y-%m-%d %H:%M:%S %Z%z"
             now = self._now(timezone_str)
-            return self._format(now, fmt, timezone_str)
+            result = self._format(now, fmt, timezone_str)
+            log_tool_event(
+                "current_time",
+                event="invoke",
+                status="ok",
+                request=kwargs,
+                response=result,
+                raw_input=kwargs,
+                output=result,
+            )
+            return result
         except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("current_time.failed", extra={"error": str(exc)})
+            log_tool_event(
+                "current_time",
+                event="invoke",
+                status="error",
+                request=kwargs,
+                error_code="unexpected_error",
+                message=str(exc),
+            )
             return {"error": f"时间获取失败: {exc}"}
 
     async def _arun(self, **kwargs) -> Dict[str, Any]:

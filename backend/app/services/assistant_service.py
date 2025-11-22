@@ -8,6 +8,7 @@ from app.ai.prompts import get_prompt_registry
 from app.agents import AssistantState, build_assistant_graph, build_tool_registry
 from app.agents.assistant.nodes import AssistantNodes
 from app.agents.assistant.tool_selection import ToolSelector
+from app.agents.tool_agent import build_tool_agent
 from app.agents.tools.registry import ToolRegistry
 from app.core.db import session_scope
 from app.core.logging import get_logger
@@ -38,6 +39,7 @@ class AssistantService:
             prompt_registry=self._prompt_registry,
             tool_registry=self._tool_registry,
         )
+        self._tool_agent = build_tool_agent(self._tool_registry.available())
         nodes = AssistantNodes(
             ai_client=self._ai_client,
             memory_service=self._memory_service,
@@ -45,6 +47,7 @@ class AssistantService:
             trip_service=self._trip_service,
             tool_selector=self._tool_selector,
             tool_registry=self._tool_registry,
+            tool_agent=self._tool_agent,
         )
         self._graph = build_assistant_graph(nodes)
         self._logger = get_logger(__name__)
