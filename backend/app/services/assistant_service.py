@@ -3,10 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.ai import AiStreamChunk, StreamCallback, get_ai_client
-from app.ai.graph import AssistantState, build_assistant_graph
-from app.ai.graph.nodes import AssistantNodes
 from app.ai.memory_models import MemoryLevel
 from app.ai.prompts import get_prompt_registry
+from app.agents import AssistantState, build_assistant_graph, build_tool_registry
+from app.agents.assistant.nodes import AssistantNodes
+from app.agents.assistant.tool_selection import ToolSelector
+from app.agents.tools.registry import ToolRegistry
 from app.core.db import session_scope
 from app.core.logging import get_logger
 from app.core.settings import settings
@@ -24,16 +26,25 @@ class AssistantService:
         *,
         memory_service: MemoryService | None = None,
         trip_service: TripQueryService | None = None,
+        tool_registry: ToolRegistry | None = None,
     ) -> None:
         self._ai_client = get_ai_client()
         self._memory_service = memory_service or get_memory_service()
         self._trip_service = trip_service or TripQueryService()
         self._prompt_registry = get_prompt_registry()
+        self._tool_registry = tool_registry or build_tool_registry()
+        self._tool_selector = ToolSelector(
+            ai_client=self._ai_client,
+            prompt_registry=self._prompt_registry,
+            tool_registry=self._tool_registry,
+        )
         nodes = AssistantNodes(
             ai_client=self._ai_client,
             memory_service=self._memory_service,
             prompt_registry=self._prompt_registry,
             trip_service=self._trip_service,
+            tool_selector=self._tool_selector,
+            tool_registry=self._tool_registry,
         )
         self._graph = build_assistant_graph(nodes)
         self._logger = get_logger(__name__)
@@ -126,6 +137,9 @@ class AssistantService:
             ai_meta=result_state.ai_meta or {},
             messages=messages,
             memory_record_id=memory_record_id,
+            selected_tool=result_state.selected_tool,
+            tool_result=result_state.tool_result,
+            tool_error=result_state.tool_error,
         )
         return result
 

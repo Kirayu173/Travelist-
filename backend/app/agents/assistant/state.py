@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.ai.memory_models import MemoryItem
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AssistantState(BaseModel):
@@ -19,6 +19,15 @@ class AssistantState(BaseModel):
     memories: list[MemoryItem] = Field(default_factory=list)
     trip_data: dict[str, Any] | None = None
 
+    selected_tool: str | None = None
+    selected_tool_reason: str | None = None
+    tool_args: dict[str, Any] = Field(default_factory=dict)
+    tool_result: Any | None = None
+    tool_error: str | None = None
+    available_tools: list[str] = Field(default_factory=list)
+
     answer_text: str | None = None
     tool_traces: list[dict[str, Any]] = Field(default_factory=list)
     ai_meta: dict[str, Any] | None = None
+
+    model_config = ConfigDict(extra="allow")

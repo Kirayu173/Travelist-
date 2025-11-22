@@ -36,9 +36,9 @@ DEFAULT_PROMPTS: dict[str, PromptTemplate] = {
         title="意图识别与工具选择",
         role="system",
         content=(
-            "根据用户的问题判断意图 intent，可选值：trip_query（查询行程），"
-            "general_qa（闲聊/常规问答）。仅输出 JSON："
-            '{"intent": "trip_query" | "general_qa", "reason": "简短说明"}'
+            "根据用户的问题判断意图 intent，可选值：trip_query（查询行程）或 "
+            'general_qa（常规问答）。仅输出 JSON: '
+            '{"intent": "trip_query" | "general_qa", "reason": "..."}'
         ),
     ),
     "assistant.response.formatter": PromptTemplate(
@@ -56,6 +56,16 @@ DEFAULT_PROMPTS: dict[str, PromptTemplate] = {
         title="兜底回答",
         role="system",
         content="直观、简短地回答用户问题，若缺少信息则告知对方需要哪些信息。",
+    ),
+    "assistant.tools.selector": PromptTemplate(
+        key="assistant.tools.selector",
+        title="工具选择",
+        role="system",
+        content=(
+            "你是一个工具选择器。依据用户问题、意图与可用工具描述，返回 JSON："
+            '{"tool": "<tool_name 或 none>", "arguments": {...}, "reason": "简述选择原因"}。'
+            "只返回 JSON，优先选择最贴切的问题解决工具；若无需工具，tool 填写 none。"
+        ),
     ),
     "chat_demo.system": PromptTemplate(
         key="chat_demo.system",

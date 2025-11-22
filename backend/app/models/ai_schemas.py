@@ -89,6 +89,9 @@ class ChatResult(BaseModel):
     ai_meta: dict[str, Any]
     messages: list[ChatMessageSchema] = Field(default_factory=list)
     memory_record_id: str | None = None
+    selected_tool: str | None = None
+    tool_result: Any | None = None
+    tool_error: str | None = None
 
 
 class PromptSchema(BaseModel):
