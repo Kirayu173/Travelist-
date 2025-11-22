@@ -149,16 +149,38 @@ class AssistantNodes:
             )
             result = await self._tool_agent.run(messages=messages, context=context)
             final_text = self._extract_final_text(result)
+            tool_calls = self._extract_tool_calls(result)
+            tool_names = [call["tool"] for call in tool_calls if call.get("tool")]
             state.tool_result = result
             state.answer_text = final_text or state.answer_text
-            state.selected_tool = "create_agent"
+            state.selected_tool = (tool_names[0] if tool_names else None) or "create_agent"
             state.tool_traces.append(
                 {
                     "node": "tool_agent",
                     "status": "ok",
-                    "tool": "create_agent",
+                    "tool": state.selected_tool,
+                    "invoked_tools": tool_names[:5] if tool_names else [],
+                    "args_preview": [
+                        {
+                            "tool": call.get("tool"),
+                            "args_keys": sorted(call.get("args").keys())
+                            if isinstance(call.get("args"), dict)
+                            else None,
+                        }
+                        for call in tool_calls[:5]
+                    ]
+                    if tool_calls
+                    else [],
                 }
             )
+            if tool_names:
+                self._logger.info(
+                    "tool_agent.complete",
+                    extra={
+                        "tools": tool_names,
+                        "selected": state.selected_tool,
+                    },
+                )
         except Exception as exc:
             state.tool_error = str(exc)
             state.tool_traces.append(
@@ -384,6 +406,66 @@ class AssistantNodes:
         if isinstance(agent_result, str):
             return agent_result
         return None
+
+    @staticmethod
+    def _extract_tool_calls(agent_result: Any) -> list[dict[str, Any]]:
+        def _collect_from_message(msg: Any) -> list[dict[str, Any]]:
+            calls: list[dict[str, Any]] = []
+            if msg is None:
+                return calls
+            # dict message
+            if isinstance(msg, dict):
+                tool_calls = msg.get("tool_calls") or msg.get("tool_call")
+                if tool_calls and isinstance(tool_calls, list):
+                    for call in tool_calls:
+                        if not isinstance(call, dict):
+                            continue
+                        calls.append(
+                            {
+                                "tool": call.get("name"),
+                                "args": call.get("args"),
+                            }
+                        )
+                # LangChain ToolMessage shape
+                if msg.get("type") == "tool" and msg.get("name"):
+                    calls.append({"tool": msg.get("name"), "args": msg.get("content")})
+            else:
+                tool_calls = getattr(msg, "tool_calls", None)
+                if tool_calls and isinstance(tool_calls, list):
+                    for call in tool_calls:
+                        name = getattr(call, "name", None) or getattr(
+                            call, "tool", None
+                        )
+                        args = getattr(call, "args", None) or getattr(
+                            call, "input", None
+                        )
+                        calls.append({"tool": name, "args": args})
+                # ToolMessage objects expose .name / .additional_kwargs
+                name = getattr(msg, "name", None)
+                if name and getattr(msg, "tool_call_id", None):
+                    calls.append(
+                        {
+                            "tool": name,
+                            "args": getattr(msg, "additional_kwargs", None),
+                        }
+                    )
+            return calls
+
+        if not agent_result:
+            return []
+        messages = []
+        if isinstance(agent_result, dict) and "messages" in agent_result:
+            messages = agent_result.get("messages") or []
+        elif isinstance(agent_result, list):
+            messages = agent_result
+        else:
+            maybe_messages = getattr(agent_result, "messages", None)
+            if maybe_messages is not None:
+                messages = maybe_messages
+        collected: list[dict[str, Any]] = []
+        for msg in messages:
+            collected.extend(_collect_from_message(msg))
+        return collected
 
     @staticmethod
     def _normalize_tool_args(
