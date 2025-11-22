@@ -64,6 +64,7 @@ async def admin_dashboard(
 async def admin_api_docs_page(request: Request):
     """Render the integrated API Docs page (Swagger UI)."""
     return templates.TemplateResponse(
+        request,
         "api_docs.html",
         {"request": request, "settings": settings},
     )
@@ -101,6 +102,7 @@ async def admin_db_schema(
         tables_dict = data.get("tables", {}) or {}
         tables = [{"name": name, **details} for name, details in tables_dict.items()]
         return templates.TemplateResponse(
+            request,
             "db_schema.html",
             {"request": request, "settings": settings, "tables": tables},
         )
@@ -295,7 +297,7 @@ async def admin_ai_console(
     # --- Fix: 注入 settings，供 base.html 使用 ---
     context["settings"] = settings
 
-    response = templates.TemplateResponse("ai_console.html", context)
+    response = templates.TemplateResponse(request, "ai_console.html", context)
     token = request.query_params.get("token")
     if token:
         response.set_cookie("admin_token", token, httponly=True, samesite="lax")
@@ -313,7 +315,7 @@ async def admin_ai_prompts(
         "settings": settings,
         "prompts": [p.model_dump(mode="json") for p in admin_service.list_prompts()],
     }
-    response = templates.TemplateResponse("ai_prompts.html", context)
+    response = templates.TemplateResponse(request, "ai_prompts.html", context)
     token = request.query_params.get("token")
     if token:
         response.set_cookie("admin_token", token, httponly=True, samesite="lax")

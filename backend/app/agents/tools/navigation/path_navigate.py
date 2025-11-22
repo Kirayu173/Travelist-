@@ -13,8 +13,8 @@ logger = tool_logger("path_navigate")
 class PathNavigateInput(BaseModel):
     routes: List[Dict[str, str]] = Field(
         ...,
-        min_items=1,
-        max_items=20,
+        min_length=1,
+        max_length=20,
         description="路径列表，每项包含 origin 和 destination",
     )
     travel_mode: Literal["driving", "walking", "transit", "bicycling"] = "driving"
