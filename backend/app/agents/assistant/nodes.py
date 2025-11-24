@@ -313,6 +313,8 @@ class AssistantNodes:
     # --- helpers ---------------------------------------------------------
     @staticmethod
     def _resolve_memory_level(state: AssistantState) -> MemoryLevel:
+        if state.memory_level:
+            return state.memory_level
         if state.session_id:
             return MemoryLevel.session
         if state.trip_id:

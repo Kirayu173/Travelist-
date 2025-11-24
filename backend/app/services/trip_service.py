@@ -205,8 +205,9 @@ class TripServiceBase:
 
     def _reindex(self, session: Session, items: list[SubTrip]) -> None:
         temp_values: list[tuple[SubTrip, int]] = []
+        base = len(items) + 1
         for idx, item in enumerate(items):
-            temp_index = -(idx + 1)
+            temp_index = -(idx + base)
             temp_values.append((item, idx))
             session.execute(
                 sa.update(SubTrip)
@@ -463,14 +464,28 @@ class SubTripService(TripServiceBase):
             day_card = session.get(DayCard, day_card_id)
             if day_card is None:
                 raise ResourceNotFoundError("DayCard 不存在", code=14005)
-            order_index = payload.order_index or len(day_card.sub_trips)
+            existing = (
+                session.query(SubTrip)
+                .filter(SubTrip.day_card_id == day_card_id)
+                .order_by(SubTrip.order_index, SubTrip.id)
+                .all()
+            )
+            target_index = (
+                len(existing) if payload.order_index is None else payload.order_index
+            )
+            target_index = max(0, min(target_index, len(existing)))
             sub_trip = self._build_sub_trip(
-                payload, day_card_id=day_card_id, order_index=order_index
+                payload, day_card_id=day_card_id, order_index=len(existing)
             )
             session.add(sub_trip)
             session.flush()
             session.refresh(sub_trip)
-            self._hydrate_sub_trip(sub_trip)
+            # Insert into in-memory list and reindex in two phases to avoid unique collisions
+            existing.insert(target_index, sub_trip)
+            self._reindex(session, existing)
+            # reload with relationships for response
+            loaded = self._load_day_card_sub_trips(session, day_card_id)
+            sub_trip = next(item for item in loaded if item.id == sub_trip.id)
             schema = SubTripSchema.model_validate(sub_trip)
             trip_id = day_card.trip_id
         _invalidate_trip_detail_cache(trip_id)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ai.memory_models import MemoryItem
+from app.ai.memory_models import MemoryItem, MemoryLevel
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -18,6 +18,7 @@ class AssistantState(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     memories: list[MemoryItem] = Field(default_factory=list)
     trip_data: dict[str, Any] | None = None
+    memory_level: MemoryLevel | None = None
 
     selected_tool: str | None = None
     selected_tool_reason: str | None = None

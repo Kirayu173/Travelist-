@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://appuser:apppass@localhost:5432/appdb"
     redis_url: str = "redis://localhost:6379/0"
+    cache_provider: Literal["memory", "redis"] = "memory"
+    cache_namespace: str = "cache"
 
     gaode_key: str | None = None
     llm_provider: str | None = None

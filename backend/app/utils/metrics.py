@@ -43,10 +43,11 @@ class RequestEvent:
 class MetricsRegistry:
     """Thread-safe in-memory store for per-route request metrics."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_events: int = 10000) -> None:
         self._routes: Dict[Tuple[str, str], RouteStats] = {}
         self._total_requests = 0
-        self._events: Deque[RequestEvent] = deque()
+        self._events: Deque[RequestEvent] = deque(maxlen=max(max_events, 1))
+        self._max_events = max(max_events, 1)
         self._lock = Lock()
 
     def record(

@@ -112,7 +112,7 @@ def delete_trip(trip_id: int) -> dict:
 @router.post(
     "/trips/{trip_id}/day_cards",
     summary="新增 DayCard",
-    description="为指定行程追加一个 DayCard，可包含同日的子行程。",
+    description="为指定行程追加一张 DayCard，可包含同日的子行程。",
 )
 def create_day_card(trip_id: int, payload: DayCardCreate) -> dict:
     service = _service()

@@ -50,7 +50,7 @@ class AreaWeatherTool(StructuredTool):
             func=self._run,
             coroutine=self._arun,
             name="area_weather",
-            description="查询多地点天气（支持实时/预报），优先使用本地缓存的行政区编码，缺失时自动查�?。",
+            description="查询多地点天气（支持实时/预报），优先使用本地缓存的行政区编码，缺失时自动查询。",
             args_schema=AreaWeatherInput,
             return_direct=False,
             handle_tool_error=True,

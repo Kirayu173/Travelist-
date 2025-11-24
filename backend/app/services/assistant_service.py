@@ -58,9 +58,13 @@ class AssistantService:
         *,
         stream_handler: StreamCallback | None = None,
     ) -> ChatResult:
+        client_supplied_session = payload.session_id is not None
         session_obj = self._ensure_session(payload)
         history = self._load_history(session_obj.id)
         max_k = payload.top_k_memory or settings.mem0_default_k
+        memory_level = self._resolve_memory_level(
+            payload, client_supplied_session=client_supplied_session
+        )
         state = AssistantState(
             user_id=payload.user_id,
             trip_id=payload.trip_id,
@@ -69,6 +73,7 @@ class AssistantService:
             use_memory=payload.use_memory,
             top_k=max_k,
             history=history,
+            memory_level=memory_level,
         )
         self._logger.info(
             "assistant.enter",
@@ -146,7 +151,12 @@ class AssistantService:
         )
         return result
 
-    def _ensure_session(self, payload: ChatPayload) -> ChatSession:
+    def _ensure_session(
+        self,
+        payload: ChatPayload,
+        *,
+        allow_create: bool = True,
+    ) -> ChatSession:
         with session_scope() as session:
             if payload.session_id:
                 session_obj = session.get(ChatSession, payload.session_id)
@@ -154,6 +164,9 @@ class AssistantService:
                     msg = "会话不存在或不属于该用户"
                     raise ValueError(msg)
                 return session_obj
+            if not allow_create:
+                msg = "缺少会话标识，且禁止创建新会话"
+                raise ValueError(msg)
             session_obj = ChatSession(user_id=payload.user_id, trip_id=payload.trip_id)
             session.add(session_obj)
             session.commit()
@@ -217,7 +230,9 @@ class AssistantService:
         answer: str,
     ) -> str | None:
         try:
-            level = self._resolve_memory_level(payload, session_id)
+            level = self._resolve_memory_level(
+                payload, client_supplied_session=payload.session_id is not None
+            )
         except ValueError:
             return None
         metadata = {
@@ -236,8 +251,10 @@ class AssistantService:
         )
 
     @staticmethod
-    def _resolve_memory_level(payload: ChatPayload, session_id: int) -> MemoryLevel:
-        if session_id:
+    def _resolve_memory_level(
+        payload: ChatPayload, *, client_supplied_session: bool
+    ) -> MemoryLevel:
+        if client_supplied_session:
             return MemoryLevel.session
         if payload.trip_id:
             return MemoryLevel.trip

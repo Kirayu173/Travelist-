@@ -160,6 +160,56 @@ def test_sub_trip_reorder_across_days(client):
     assert updated_day1["sub_trips"][0]["order_index"] == 0
 
 
+def test_create_sub_trip_respects_order_index(client):
+    user_id = _create_user()
+    create_resp = client.post(
+        "/api/trips",
+        json={
+            "user_id": user_id,
+            "title": "Order 测试",
+            "destination": "深圳",
+            "day_cards": [
+                {
+                    "day_index": 0,
+                    "sub_trips": [
+                        {"order_index": 0, "activity": "早餐"},
+                        {"order_index": 1, "activity": "午餐"},
+                    ],
+                }
+            ],
+        },
+    )
+    trip_payload = create_resp.json()["data"]["trip"]
+    day0 = trip_payload["day_cards"][0]
+    day_card_id = day0["id"]
+    trip_id = trip_payload["id"]
+
+    # insert at head with explicit 0
+    insert_resp = client.post(
+        f"/api/day_cards/{day_card_id}/sub_trips",
+        json={"activity": "早茶", "order_index": 0},
+    )
+    assert insert_resp.status_code == 200
+
+    detail = client.get(f"/api/trips/{trip_id}").json()["data"]
+    day0_detail = next(card for card in detail["day_cards"] if card["id"] == day_card_id)
+    names = [item["activity"] for item in day0_detail["sub_trips"]]
+    order_indexes = [item["order_index"] for item in day0_detail["sub_trips"]]
+    assert names[:3] == ["早茶", "早餐", "午餐"]
+    assert order_indexes[:3] == [0, 1, 2]
+
+    # append when order_index omitted
+    append_resp = client.post(
+        f"/api/day_cards/{day_card_id}/sub_trips",
+        json={"activity": "晚餐"},
+    )
+    assert append_resp.status_code == 200
+    detail = client.get(f"/api/trips/{trip_id}").json()["data"]
+    day0_detail = next(card for card in detail["day_cards"] if card["id"] == day_card_id)
+    assert day0_detail["sub_trips"][-1]["activity"] == "晚餐"
+    assert day0_detail["sub_trips"][-1]["order_index"] == 3
+
+
 def test_trip_creation_requires_existing_user(client):
     resp = client.post(
         "/api/trips",
