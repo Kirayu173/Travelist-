@@ -80,6 +80,12 @@ def test_admin_db_and_redis_status_endpoints_return_payload(client):
     assert "status" in redis_resp.json()["data"]
 
 
+def test_admin_memory_page_renders(client):
+    resp = client.get("/admin/ai/memories")
+    assert resp.status_code == 200
+    assert "记忆浏览" in resp.text
+
+
 def test_admin_db_health_endpoint_reports_engine(client):
     resp = client.get("/admin/db/health")
     assert resp.status_code == 200

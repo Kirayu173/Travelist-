@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}智能体记忆{% endblock %}
+{% block header %}智能体记忆浏览{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <form method="get" class="bg-white border border-slate-200 rounded-xl shadow p-4 grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">用户 ID</label>
+            <input name="user_id" value="{{ filters.user_id }}" class="w-full border border-slate-200 rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">层级</label>
+            <select name="level" class="w-full border border-slate-200 rounded px-3 py-2 text-sm">
+                {% for lvl in ["user","trip","session"] %}
+                <option value="{{ lvl }}" {% if filters.level == lvl %}selected{% endif %}>{{ lvl }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">Trip ID</label>
+            <input name="trip_id" value="{{ filters.trip_id or '' }}" class="w-full border border-slate-200 rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">Session ID</label>
+            <input name="session_id" value="{{ filters.session_id }}" class="w-full border border-slate-200 rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">关键词</label>
+            <input name="q" value="{{ filters.q }}" placeholder="query/空为全部" class="w-full border border-slate-200 rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">每页</label>
+            <input name="limit" type="number" value="{{ filters.limit }}" class="w-full border border-slate-200 rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">Offset</label>
+            <input name="offset" type="number" value="{{ filters.offset }}" class="w-full border border-slate-200 rounded px-3 py-2 text-sm" />
+        </div>
+        <div class="md:col-span-2 flex items-end">
+            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">筛选</button>
+        </div>
+    </form>
+
+    <div class="overflow-x-auto bg-white shadow rounded-xl border border-slate-200">
+        <table class="min-w-full text-left">
+            <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+                <tr>
+                    <th class="px-4 py-3 font-semibold">ID</th>
+                    <th class="px-4 py-3 font-semibold">Namespace</th>
+                    <th class="px-4 py-3 font-semibold">内容</th>
+                    <th class="px-4 py-3 font-semibold">Metadata</th>
+                    <th class="px-4 py-3 font-semibold">时间戳</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% for item in memories %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 font-mono text-xs text-slate-500">{{ item.id }}</td>
+                    <td class="px-4 py-3 text-slate-700">{{ item.namespace }}</td>
+                    <td class="px-4 py-3 text-slate-900 whitespace-pre-line">{{ item.text }}</td>
+                    <td class="px-4 py-3 text-slate-700">
+                        <div class="font-mono text-xs bg-slate-100 rounded px-2 py-1 break-all">{{ item.metadata | tojson }}</div>
+                    </td>
+                    <td class="px-4 py-3 text-slate-600 text-xs">{{ item.created_at }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-4 py-6 text-center text-slate-500">暂无本地记忆记录。</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

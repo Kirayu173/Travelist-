@@ -53,7 +53,7 @@ class _InMemoryStore:
             bucket = self._store[namespace]
             bucket.append(entry)
             self._enforce_limits(bucket)
-            self._enforce_global_limit()
+        self._enforce_global_limit()
         return record_id
 
     def search(self, namespace: str, query: str, k: int) -> list[MemoryItem]:
@@ -76,6 +76,27 @@ class _InMemoryStore:
                 )
             )
         return payload
+
+    def list_recent(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock:
+            entries: list[tuple[str, _LocalMemory]] = []
+            for namespace, bucket in self._store.items():
+                for item in bucket:
+                    entries.append((namespace, item))
+        # order by created_at descending
+        entries.sort(key=lambda pair: pair[1].created_at, reverse=True)
+        rows = []
+        for namespace, item in entries[: max(limit, 1)]:
+            rows.append(
+                {
+                    "id": item.id,
+                    "namespace": namespace,
+                    "text": item.text,
+                    "metadata": item.metadata,
+                    "created_at": item.created_at,
+                }
+            )
+        return rows
 
     def clear(self) -> None:
         with self._lock:
@@ -251,6 +272,33 @@ class MemoryService:
             self._report_fallback_stats()
             return fallback
 
+    async def list_memories(
+        self,
+        *,
+        user_id: int,
+        level: MemoryLevel,
+        query: str = "",
+        trip_id: int | None = None,
+        session_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[MemoryItem]:
+        """
+        List memories for diagnostics/inspection, leveraging the same search path.
+        Offset is applied locally after retrieval to stay compatible with mem0/local store.
+        """
+
+        fetch_limit = max(limit + offset, 1)
+        items = await self.search_memory(
+            user_id=user_id,
+            level=level,
+            query=query or "*",
+            trip_id=trip_id,
+            session_id=session_id,
+            k=fetch_limit,
+        )
+        return items[offset : offset + limit]
+
     @staticmethod
     def _build_namespace(
         *,
@@ -332,6 +380,11 @@ class MemoryService:
             max_entries_per_namespace=stats["max_entries_per_namespace"],
             max_total_entries=stats["max_total_entries"],
         )
+
+    def list_recent_memories(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Return recent fallback memories for diagnostics."""
+
+        return self._local_store.list_recent(limit=limit)
 
 
 _memory_service: MemoryService | None = None

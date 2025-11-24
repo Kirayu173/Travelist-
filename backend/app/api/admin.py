@@ -9,6 +9,8 @@ from app.admin.schemas import ApiTestRequest
 from app.core.db import get_db
 from app.core.settings import settings
 from app.models.ai_schemas import PromptUpdatePayload
+from app.ai.memory_models import MemoryLevel
+from app.services.memory_service import get_memory_service
 from app.utils.responses import error_response, success_response
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -326,6 +328,49 @@ async def admin_ai_prompts(
     if token:
         response.set_cookie("admin_token", token, httponly=True, samesite="lax")
     return response
+
+
+@router.get("/ai/memories", response_class=HTMLResponse, summary="智能体记忆浏览")
+async def admin_ai_memories(
+    request: Request,
+    user_id: int = Query(default=1, ge=1, description="用户 ID"),
+    level: str = Query(default="user", description="记忆层级: user/trip/session"),
+    trip_id: int | None = Query(default=None, ge=1),
+    session_id: str | None = Query(default=None),
+    q: str | None = Query(default=None, description="全文检索关键字"),
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=2000),
+) -> HTMLResponse:
+    memory_service = get_memory_service()
+    try:
+        level_enum = MemoryLevel(level)
+    except ValueError:
+        level_enum = MemoryLevel.user
+
+    items = await memory_service.list_memories(
+        user_id=user_id,
+        level=level_enum,
+        query=q or "",
+        trip_id=trip_id,
+        session_id=session_id,
+        limit=limit,
+        offset=offset,
+    )
+    context = {
+        "request": request,
+        "settings": settings,
+        "memories": [item.model_dump(mode="json") for item in items],
+        "filters": {
+            "user_id": user_id,
+            "trip_id": trip_id,
+            "session_id": session_id or "",
+            "level": level_enum.value,
+            "q": q or "",
+            "limit": limit,
+            "offset": offset,
+        },
+    }
+    return templates.TemplateResponse(request, "ai_memories.html", context)
 
 
 @router.get("/health")
