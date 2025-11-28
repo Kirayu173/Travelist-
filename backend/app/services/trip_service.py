@@ -500,6 +500,7 @@ class SubTripService(TripServiceBase):
         )
         return schema
 
+
     def update_sub_trip(
         self, sub_trip_id: int, payload: SubTripUpdate
     ) -> SubTripSchema:
@@ -507,6 +508,8 @@ class SubTripService(TripServiceBase):
             sub_trip = session.get(SubTrip, sub_trip_id)
             if sub_trip is None:
                 raise ResourceNotFoundError("子行程不存在", code=14006)
+
+            new_order_index = payload.order_index
             if payload.activity is not None:
                 sub_trip.activity = payload.activity
             if payload.poi_id is not None:
@@ -525,8 +528,21 @@ class SubTripService(TripServiceBase):
             coord_fields = {"lat", "lng"} & payload.model_fields_set
             if coord_fields:
                 if payload.lat is None or payload.lng is None:
-                    raise TripValidationError("lat 与 lng 需同时提供", code=14012)
+                    raise TripValidationError("lat ? lng ?????", code=14012)
                 self._sync_coordinates(sub_trip, payload.lat, payload.lng)
+
+            if new_order_index is not None:
+                existing = (
+                    session.query(SubTrip)
+                    .filter(SubTrip.day_card_id == sub_trip.day_card_id)
+                    .order_by(SubTrip.order_index, SubTrip.id)
+                    .all()
+                )
+                remaining = [item for item in existing if item.id != sub_trip.id]
+                target_index = max(0, min(new_order_index, len(remaining)))
+                remaining.insert(target_index, sub_trip)
+                self._reindex(session, remaining)
+
             session.flush()
             self._hydrate_sub_trip(sub_trip)
             schema = SubTripSchema.model_validate(sub_trip)

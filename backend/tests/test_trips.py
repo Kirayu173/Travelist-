@@ -160,6 +160,42 @@ def test_sub_trip_reorder_across_days(client):
     assert updated_day1["sub_trips"][0]["order_index"] == 0
 
 
+def test_update_sub_trip_allows_reorder(client):
+    user_id = _create_user()
+    create_resp = client.post(
+        "/api/trips",
+        json={
+            "user_id": user_id,
+            "title": "更新排序",
+            "destination": "北京",
+            "day_cards": [
+                {
+                    "day_index": 0,
+                    "sub_trips": [
+                        {"order_index": 0, "activity": "早饭"},
+                        {"order_index": 1, "activity": "午饭"},
+                    ],
+                }
+            ],
+        },
+    )
+    trip_payload = create_resp.json()["data"]["trip"]
+    trip_id = trip_payload["id"]
+    day_card = trip_payload["day_cards"][0]
+    first_id = day_card["sub_trips"][0]["id"]
+
+    update_resp = client.put(
+        f"/api/sub_trips/{first_id}",
+        json={"order_index": 1},
+    )
+    assert update_resp.status_code == 200
+
+    detail = client.get(f"/api/trips/{trip_id}").json()["data"]
+    sub_trips = detail["day_cards"][0]["sub_trips"]
+    assert [item["activity"] for item in sub_trips[:2]] == ["午饭", "早饭"]
+    assert [item["order_index"] for item in sub_trips[:2]] == [0, 1]
+
+
 def test_create_sub_trip_respects_order_index(client):
     user_id = _create_user()
     create_resp = client.post(
