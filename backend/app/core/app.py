@@ -1,5 +1,5 @@
 from app.admin.auth import AdminAuthError
-from app.api import admin, ai, health, trips
+from app.api import admin, ai, health, poi, trips
 from app.core.logging import setup_logging
 from app.core.settings import settings
 from app.utils.metrics import APIMetricsMiddleware
@@ -19,6 +19,7 @@ def create_app() -> FastAPI:
     application.add_middleware(APIMetricsMiddleware)
     application.include_router(health.router)
     application.include_router(trips.router)
+    application.include_router(poi.router)
     application.include_router(ai.router)
     application.include_router(admin.router, prefix="/admin", tags=["admin"])
     application.add_exception_handler(

@@ -181,11 +181,159 @@ def _build_filters_and_metadata(
     return base_metadata_template, effective_query_filters
 
 
+class _MemoryHelpersMixin:
+    @staticmethod
+    def _process_config(config_dict: Dict[str, Any]) -> Dict[str, Any]:
+        if "graph_store" in config_dict:
+            if "vector_store" not in config_dict and "embedder" in config_dict:
+                config_dict["vector_store"] = {}
+                config_dict["vector_store"]["config"] = {}
+                config_dict["vector_store"]["config"]["embedding_model_dims"] = (
+                    config_dict["embedder"]["config"]["embedding_dims"]
+                )
+        try:
+            return config_dict
+        except ValidationError as e:
+            logger.error(f"Configuration validation error: {e}")
+            raise
+
+    def _should_use_agent_memory_extraction(self, messages, metadata):
+        """Determine whether to use agent memory extraction based on the logic:
+        - If agent_id is present and messages contain assistant role -> True
+        - Otherwise -> False
+
+        Args:
+            messages: List of message dictionaries
+            metadata: Metadata containing user_id, agent_id, etc.
+
+        Returns:
+            bool: True if should use agent memory extraction, False for user memory extraction
+        """
+        has_agent_id = metadata.get("agent_id") is not None
+        has_assistant_messages = any(msg.get("role") == "assistant" for msg in messages)
+        return has_agent_id and has_assistant_messages
+
+    def _process_metadata_filters(
+        self, metadata_filters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Process enhanced metadata filters and convert them to vector store compatible format.
+
+        Args:
+            metadata_filters: Enhanced metadata filters with operators
+
+        Returns:
+            Dict of processed filters compatible with vector store
+        """
+        processed_filters = {}
+
+        def process_condition(key: str, condition: Any) -> Dict[str, Any]:
+            if not isinstance(condition, dict):
+                # Simple equality: {"key": "value"}
+                if condition == "*":
+                    # Wildcard: match everything for this field (implementation depends on vector store)
+                    return {key: "*"}
+                return {key: condition}
+
+            result = {}
+            for operator, value in condition.items():
+                # Map platform operators to universal format that can be translated by each vector store
+                operator_map = {
+                    "eq": "eq",
+                    "ne": "ne",
+                    "gt": "gt",
+                    "gte": "gte",
+                    "lt": "lt",
+                    "lte": "lte",
+                    "in": "in",
+                    "nin": "nin",
+                    "contains": "contains",
+                    "icontains": "icontains",
+                }
+
+                if operator in operator_map:
+                    result[key] = {operator_map[operator]: value}
+                else:
+                    raise ValueError(
+                        f"Unsupported metadata filter operator: {operator}"
+                    )
+            return result
+
+        for key, value in metadata_filters.items():
+            if key == "AND":
+                # Logical AND: combine multiple conditions
+                if not isinstance(value, list):
+                    raise ValueError("AND operator requires a list of conditions")
+                for condition in value:
+                    for sub_key, sub_value in condition.items():
+                        processed_filters.update(process_condition(sub_key, sub_value))
+            elif key == "OR":
+                # Logical OR: Pass through to vector store for implementation-specific handling
+                if not isinstance(value, list) or not value:
+                    raise ValueError("OR operator requires a non-empty list of conditions")
+                # Store OR conditions in a way that vector stores can interpret
+                processed_filters["$or"] = []
+                for condition in value:
+                    or_condition = {}
+                    for sub_key, sub_value in condition.items():
+                        or_condition.update(process_condition(sub_key, sub_value))
+                    processed_filters["$or"].append(or_condition)
+            elif key == "NOT":
+                # Logical NOT: Pass through to vector store for implementation-specific handling
+                if not isinstance(value, list) or not value:
+                    raise ValueError("NOT operator requires a non-empty list of conditions")
+                processed_filters["$not"] = []
+                for condition in value:
+                    not_condition = {}
+                    for sub_key, sub_value in condition.items():
+                        not_condition.update(process_condition(sub_key, sub_value))
+                    processed_filters["$not"].append(not_condition)
+            else:
+                processed_filters.update(process_condition(key, value))
+
+        return processed_filters
+
+    def _has_advanced_operators(self, filters: Dict[str, Any]) -> bool:
+        """
+        Check if filters contain advanced operators that need special processing.
+
+        Args:
+            filters: Dictionary of filters to check
+
+        Returns:
+            bool: True if advanced operators are detected
+        """
+        if not isinstance(filters, dict):
+            return False
+
+        for key, value in filters.items():
+            if key in ["AND", "OR", "NOT"]:
+                return True
+            if isinstance(value, dict):
+                for op in value.keys():
+                    if op in [
+                        "eq",
+                        "ne",
+                        "gt",
+                        "gte",
+                        "lt",
+                        "lte",
+                        "in",
+                        "nin",
+                        "contains",
+                        "icontains",
+                    ]:
+                        return True
+            if value == "*":
+                return True
+        return False
+
+
 setup_config()
 logger = logging.getLogger(__name__)
 
 
-class Memory(MemoryBase):
+class Memory(_MemoryHelpersMixin, MemoryBase):
     def __init__(self, config: MemoryConfig | None = None):
         if config is None:
             msg = "MemoryConfig is required to initialize Memory"
@@ -271,42 +419,6 @@ class Memory(MemoryBase):
             logger.error(f"Configuration validation error: {e}")
             raise
         return cls(config)
-
-    @staticmethod
-    def _process_config(config_dict: Dict[str, Any]) -> Dict[str, Any]:
-        if "graph_store" in config_dict:
-            if "vector_store" not in config_dict and "embedder" in config_dict:
-                config_dict["vector_store"] = {}
-                config_dict["vector_store"]["config"] = {}
-                config_dict["vector_store"]["config"]["embedding_model_dims"] = (
-                    config_dict["embedder"]["config"]["embedding_dims"]
-                )
-        try:
-            return config_dict
-        except ValidationError as e:
-            logger.error(f"Configuration validation error: {e}")
-            raise
-
-    def _should_use_agent_memory_extraction(self, messages, metadata):
-        """Determine whether to use agent memory extraction based on the logic:
-        - If agent_id is present and messages contain assistant role -> True
-        - Otherwise -> False
-
-        Args:
-            messages: List of message dictionaries
-            metadata: Metadata containing user_id, agent_id, etc.
-
-        Returns:
-            bool: True if should use agent memory extraction, False for user memory extraction
-        """
-        # Check if agent_id is present in metadata
-        has_agent_id = metadata.get("agent_id") is not None
-
-        # Check if there are assistant role messages
-        has_assistant_messages = any(msg.get("role") == "assistant" for msg in messages)
-
-        # Use agent memory extraction if agent_id is present and there are assistant messages
-        return has_agent_id and has_assistant_messages
 
     def add(
         self,
@@ -987,128 +1099,6 @@ class Memory(MemoryBase):
 
         return {"results": original_memories}
 
-    def _process_metadata_filters(
-        self, metadata_filters: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Process enhanced metadata filters and convert them to vector store compatible format.
-
-        Args:
-            metadata_filters: Enhanced metadata filters with operators
-
-        Returns:
-            Dict of processed filters compatible with vector store
-        """
-        processed_filters = {}
-
-        def process_condition(key: str, condition: Any) -> Dict[str, Any]:
-            if not isinstance(condition, dict):
-                # Simple equality: {"key": "value"}
-                if condition == "*":
-                    # Wildcard: match everything for this field (implementation depends on vector store)
-                    return {key: "*"}
-                return {key: condition}
-
-            result = {}
-            for operator, value in condition.items():
-                # Map platform operators to universal format that can be translated by each vector store
-                operator_map = {
-                    "eq": "eq",
-                    "ne": "ne",
-                    "gt": "gt",
-                    "gte": "gte",
-                    "lt": "lt",
-                    "lte": "lte",
-                    "in": "in",
-                    "nin": "nin",
-                    "contains": "contains",
-                    "icontains": "icontains",
-                }
-
-                if operator in operator_map:
-                    result[key] = {operator_map[operator]: value}
-                else:
-                    raise ValueError(
-                        f"Unsupported metadata filter operator: {operator}"
-                    )
-            return result
-
-        for key, value in metadata_filters.items():
-            if key == "AND":
-                # Logical AND: combine multiple conditions
-                if not isinstance(value, list):
-                    raise ValueError("AND operator requires a list of conditions")
-                for condition in value:
-                    for sub_key, sub_value in condition.items():
-                        processed_filters.update(process_condition(sub_key, sub_value))
-            elif key == "OR":
-                # Logical OR: Pass through to vector store for implementation-specific handling
-                if not isinstance(value, list) or not value:
-                    raise ValueError(
-                        "OR operator requires a non-empty list of conditions"
-                    )
-                # Store OR conditions in a way that vector stores can interpret
-                processed_filters["$or"] = []
-                for condition in value:
-                    or_condition = {}
-                    for sub_key, sub_value in condition.items():
-                        or_condition.update(process_condition(sub_key, sub_value))
-                    processed_filters["$or"].append(or_condition)
-            elif key == "NOT":
-                # Logical NOT: Pass through to vector store for implementation-specific handling
-                if not isinstance(value, list) or not value:
-                    raise ValueError(
-                        "NOT operator requires a non-empty list of conditions"
-                    )
-                processed_filters["$not"] = []
-                for condition in value:
-                    not_condition = {}
-                    for sub_key, sub_value in condition.items():
-                        not_condition.update(process_condition(sub_key, sub_value))
-                    processed_filters["$not"].append(not_condition)
-            else:
-                processed_filters.update(process_condition(key, value))
-
-        return processed_filters
-
-    def _has_advanced_operators(self, filters: Dict[str, Any]) -> bool:
-        """
-        Check if filters contain advanced operators that need special processing.
-
-        Args:
-            filters: Dictionary of filters to check
-
-        Returns:
-            bool: True if advanced operators are detected
-        """
-        if not isinstance(filters, dict):
-            return False
-
-        for key, value in filters.items():
-            # Check for platform-style logical operators
-            if key in ["AND", "OR", "NOT"]:
-                return True
-            # Check for comparison operators (without $ prefix for universal compatibility)
-            if isinstance(value, dict):
-                for op in value.keys():
-                    if op in [
-                        "eq",
-                        "ne",
-                        "gt",
-                        "gte",
-                        "lt",
-                        "lte",
-                        "in",
-                        "nin",
-                        "contains",
-                        "icontains",
-                    ]:
-                        return True
-            # Check for wildcard values
-            if value == "*":
-                return True
-        return False
-
     def _search_vector_store(
         self, query, filters, limit, threshold: Optional[float] = None
     ):
@@ -1436,7 +1426,7 @@ class Memory(MemoryBase):
         raise NotImplementedError("Chat function not implemented yet.")
 
 
-class AsyncMemory(MemoryBase):
+class AsyncMemory(_MemoryHelpersMixin, MemoryBase):
     def __init__(self, config: MemoryConfig | None = None):
         if config is None:
             msg = "MemoryConfig is required to initialize AsyncMemory"
@@ -1493,42 +1483,6 @@ class AsyncMemory(MemoryBase):
             logger.error(f"Configuration validation error: {e}")
             raise
         return cls(config)
-
-    @staticmethod
-    def _process_config(config_dict: Dict[str, Any]) -> Dict[str, Any]:
-        if "graph_store" in config_dict:
-            if "vector_store" not in config_dict and "embedder" in config_dict:
-                config_dict["vector_store"] = {}
-                config_dict["vector_store"]["config"] = {}
-                config_dict["vector_store"]["config"]["embedding_model_dims"] = (
-                    config_dict["embedder"]["config"]["embedding_dims"]
-                )
-        try:
-            return config_dict
-        except ValidationError as e:
-            logger.error(f"Configuration validation error: {e}")
-            raise
-
-    def _should_use_agent_memory_extraction(self, messages, metadata):
-        """Determine whether to use agent memory extraction based on the logic:
-        - If agent_id is present and messages contain assistant role -> True
-        - Otherwise -> False
-
-        Args:
-            messages: List of message dictionaries
-            metadata: Metadata containing user_id, agent_id, etc.
-
-        Returns:
-            bool: True if should use agent memory extraction, False for user memory extraction
-        """
-        # Check if agent_id is present in metadata
-        has_agent_id = metadata.get("agent_id") is not None
-
-        # Check if there are assistant role messages
-        has_assistant_messages = any(msg.get("role") == "assistant" for msg in messages)
-
-        # Use agent memory extraction if agent_id is present and there are assistant messages
-        return has_agent_id and has_assistant_messages
 
     async def add(
         self,
@@ -2245,128 +2199,6 @@ class AsyncMemory(MemoryBase):
             return {"results": original_memories, "relations": graph_entities}
 
         return {"results": original_memories}
-
-    def _process_metadata_filters(
-        self, metadata_filters: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Process enhanced metadata filters and convert them to vector store compatible format.
-
-        Args:
-            metadata_filters: Enhanced metadata filters with operators
-
-        Returns:
-            Dict of processed filters compatible with vector store
-        """
-        processed_filters = {}
-
-        def process_condition(key: str, condition: Any) -> Dict[str, Any]:
-            if not isinstance(condition, dict):
-                # Simple equality: {"key": "value"}
-                if condition == "*":
-                    # Wildcard: match everything for this field (implementation depends on vector store)
-                    return {key: "*"}
-                return {key: condition}
-
-            result = {}
-            for operator, value in condition.items():
-                # Map platform operators to universal format that can be translated by each vector store
-                operator_map = {
-                    "eq": "eq",
-                    "ne": "ne",
-                    "gt": "gt",
-                    "gte": "gte",
-                    "lt": "lt",
-                    "lte": "lte",
-                    "in": "in",
-                    "nin": "nin",
-                    "contains": "contains",
-                    "icontains": "icontains",
-                }
-
-                if operator in operator_map:
-                    result[key] = {operator_map[operator]: value}
-                else:
-                    raise ValueError(
-                        f"Unsupported metadata filter operator: {operator}"
-                    )
-            return result
-
-        for key, value in metadata_filters.items():
-            if key == "AND":
-                # Logical AND: combine multiple conditions
-                if not isinstance(value, list):
-                    raise ValueError("AND operator requires a list of conditions")
-                for condition in value:
-                    for sub_key, sub_value in condition.items():
-                        processed_filters.update(process_condition(sub_key, sub_value))
-            elif key == "OR":
-                # Logical OR: Pass through to vector store for implementation-specific handling
-                if not isinstance(value, list) or not value:
-                    raise ValueError(
-                        "OR operator requires a non-empty list of conditions"
-                    )
-                # Store OR conditions in a way that vector stores can interpret
-                processed_filters["$or"] = []
-                for condition in value:
-                    or_condition = {}
-                    for sub_key, sub_value in condition.items():
-                        or_condition.update(process_condition(sub_key, sub_value))
-                    processed_filters["$or"].append(or_condition)
-            elif key == "NOT":
-                # Logical NOT: Pass through to vector store for implementation-specific handling
-                if not isinstance(value, list) or not value:
-                    raise ValueError(
-                        "NOT operator requires a non-empty list of conditions"
-                    )
-                processed_filters["$not"] = []
-                for condition in value:
-                    not_condition = {}
-                    for sub_key, sub_value in condition.items():
-                        not_condition.update(process_condition(sub_key, sub_value))
-                    processed_filters["$not"].append(not_condition)
-            else:
-                processed_filters.update(process_condition(key, value))
-
-        return processed_filters
-
-    def _has_advanced_operators(self, filters: Dict[str, Any]) -> bool:
-        """
-        Check if filters contain advanced operators that need special processing.
-
-        Args:
-            filters: Dictionary of filters to check
-
-        Returns:
-            bool: True if advanced operators are detected
-        """
-        if not isinstance(filters, dict):
-            return False
-
-        for key, value in filters.items():
-            # Check for platform-style logical operators
-            if key in ["AND", "OR", "NOT"]:
-                return True
-            # Check for comparison operators (without $ prefix for universal compatibility)
-            if isinstance(value, dict):
-                for op in value.keys():
-                    if op in [
-                        "eq",
-                        "ne",
-                        "gt",
-                        "gte",
-                        "lt",
-                        "lte",
-                        "in",
-                        "nin",
-                        "contains",
-                        "icontains",
-                    ]:
-                        return True
-            # Check for wildcard values
-            if value == "*":
-                return True
-        return False
 
     async def _search_vector_store(
         self, query, filters, limit, threshold: Optional[float] = None

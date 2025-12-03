@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Iterable, Type
+from typing import Any, Awaitable, Callable, Iterable
 
 from app.core.logging import get_logger
 from pydantic import BaseModel, ValidationError

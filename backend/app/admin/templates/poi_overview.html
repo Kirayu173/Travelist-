@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}POI 监控 - Travelist Admin{% endblock %}
+{% block header %}POI 监控与缓存统计{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-slate-800">POI 监控</h1>
+    <p class="text-slate-500 mt-1">关注附近检索接口的缓存命中率、第三方调用与数据规模。</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium">POI 总数</div>
+        <div class="text-3xl font-bold text-slate-800 mt-2">{{ summary.pois_total or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-1">近 7 日新增 {{ summary.pois_recent_7d or 0 }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium">缓存命中</div>
+        <div class="text-3xl font-bold text-emerald-600 mt-2">{{ summary.cache_hits or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-1">Miss: {{ summary.cache_misses or 0 }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium">第三方调用</div>
+        <div class="text-3xl font-bold text-blue-600 mt-2">{{ summary.api_calls or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-1">失败 {{ summary.api_failures or 0 }}</div>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <h3 class="font-semibold text-slate-800 mb-4">接口调试</h3>
+    <p class="text-sm text-slate-500 mb-3">快速验证 <code>/api/poi/around</code>，示例参数：lat=23.12908, lng=113.26436, radius=2000。</p>
+    <div class="flex items-center gap-3">
+        <input id="lat" type="number" step="0.0001" value="23.12908" class="w-32 border border-slate-200 rounded px-3 py-2 text-sm" />
+        <input id="lng" type="number" step="0.0001" value="113.26436" class="w-32 border border-slate-200 rounded px-3 py-2 text-sm" />
+        <input id="radius" type="number" value="2000" class="w-28 border border-slate-200 rounded px-3 py-2 text-sm" />
+        <button onclick="testPoi()" class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 text-sm">测试查询</button>
+    </div>
+    <pre id="poiResult" class="mt-4 bg-slate-900 text-slate-100 text-xs p-4 rounded overflow-x-auto">等待请求...</pre>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function testPoi() {
+    const lat = document.getElementById('lat').value;
+    const lng = document.getElementById('lng').value;
+    const radius = document.getElementById('radius').value;
+    const target = document.getElementById('poiResult');
+    target.textContent = '请求中...';
+    try {
+        const res = await fetch(`/api/poi/around?lat=${lat}&lng=${lng}&radius=${radius}`);
+        const data = await res.json();
+        target.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+        target.textContent = `请求失败: ${e}`;
+    }
+}
+</script>
+{% endblock %}

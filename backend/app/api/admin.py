@@ -171,6 +171,15 @@ async def admin_db_status(
     return success_response(status)
 
 
+@router.get("/poi/summary")
+async def admin_poi_summary(
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> dict:
+    summary = await admin_service.get_poi_summary()
+    return success_response(summary)
+
+
 @router.get("/redis/status")
 async def admin_redis_status(
     admin_service: AdminService = Depends(get_admin_service),
@@ -387,3 +396,18 @@ async def admin_db_stats(
 ) -> dict:
     stats = await admin_service.get_db_stats()
     return success_response(stats)
+
+
+@router.get("/poi/overview", response_class=HTMLResponse)
+async def admin_poi_overview(
+    request: Request,
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> HTMLResponse:
+    summary = await admin_service.get_poi_summary()
+    context = {
+        "request": request,
+        "settings": settings,
+        "summary": summary,
+    }
+    return templates.TemplateResponse(request, "poi_overview.html", context)

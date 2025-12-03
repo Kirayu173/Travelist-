@@ -14,6 +14,7 @@ from app.ai.prompts import PromptRegistry
 from app.core.logging import get_logger
 from app.core.settings import settings
 from app.services.memory_service import MemoryService
+from app.services.poi_service import PoiService, PoiServiceError
 from app.services.trip_service import TripQueryService
 
 
@@ -28,6 +29,7 @@ class AssistantNodes:
         trip_service: TripQueryService,
         tool_selector: ToolSelector,
         tool_registry: ToolRegistry,
+        poi_service: PoiService,
         tool_agent: ToolAgentRunner | None = None,
     ) -> None:
         self._ai_client = ai_client
@@ -38,6 +40,7 @@ class AssistantNodes:
         self._tool_registry = tool_registry
         self._tool_agent = tool_agent
         self._logger = get_logger(__name__)
+        self._poi_service = poi_service
 
     async def memory_read_node(self, state: AssistantState) -> AssistantState:
         self._logger.info(
@@ -90,6 +93,11 @@ class AssistantNodes:
         result = await self._ai_client.chat(request)
         intent = self._infer_intent(result.content, state.query)
         state.intent = intent
+        if intent and intent.startswith("poi"):
+            inferred_type = self._guess_poi_type(state.query)
+            state.poi_query = state.poi_query or {}
+            if inferred_type and not state.poi_query.get("type"):
+                state.poi_query["type"] = inferred_type
         state.ai_meta = {
             "provider": result.provider,
             "model": result.model,
@@ -99,6 +107,55 @@ class AssistantNodes:
         }
         state.tool_traces.append(
             {"node": "assistant", "status": "ok", "intent": intent}
+        )
+        return state
+
+    async def poi_node(self, state: AssistantState) -> AssistantState:
+        self._logger.info(
+            "node.enter.poi",
+            extra={"user_id": state.user_id, "session_id": state.session_id},
+        )
+        poi_intents = {"poi_nearby", "poi_food", "poi_attraction", "poi_hotel"}
+        if state.intent not in poi_intents:
+            state.tool_traces.append(
+                {"node": "poi", "status": "skipped", "reason": "intent_not_poi"}
+            )
+            return state
+        if not state.location:
+            state.tool_traces.append(
+                {"node": "poi", "status": "error", "error": "missing_location"}
+            )
+            return state
+        query = state.poi_query or {}
+        poi_type = query.get("type")
+        radius = query.get("radius")
+        try:
+            results, meta = await self._poi_service.get_poi_around(
+                lat=float(state.location.get("lat")),
+                lng=float(state.location.get("lng")),
+                poi_type=poi_type,
+                radius=radius,
+                limit=query.get("limit") or 20,
+            )
+        except PoiServiceError as exc:
+            state.tool_traces.append(
+                {"node": "poi", "status": "error", "error": exc.message}
+            )
+            return state
+        except Exception as exc:  # pragma: no cover - defensive
+            state.tool_traces.append(
+                {"node": "poi", "status": "error", "error": str(exc)}
+            )
+            return state
+
+        state.poi_results = results
+        state.tool_traces.append(
+            {
+                "node": "poi",
+                "status": "ok",
+                "count": len(results),
+                "source": (meta or {}).get("source"),
+            }
         )
         return state
 
@@ -266,6 +323,8 @@ class AssistantNodes:
             context_blocks.append(self._summarize_trip(state.trip_data))
         if state.memories:
             context_blocks.append(self._summarize_memories(state.memories))
+        if state.poi_results:
+            context_blocks.append(self._summarize_poi_results(state.poi_results))
         if state.tool_result:
             context_blocks.append(self._summarize_tool_result(state))
         history_block = self._render_history_block(state.history)
@@ -329,7 +388,9 @@ class AssistantNodes:
                 parsed_intent = obj.get("intent")
         lowered = query.lower()
         heuristic = "general_qa"
-        if any(keyword in lowered for keyword in ["行程", "trip", "计划", "安排"]):
+        if any(keyword in lowered for keyword in ["附近", "周边", "周围", "景点", "好吃", "餐厅", "美食", "hotel"]):
+            heuristic = "poi_nearby"
+        elif any(keyword in lowered for keyword in ["行程", "trip", "计划", "安排"]):
             heuristic = "trip_query"
         intent = parsed_intent or heuristic
         return intent
@@ -351,6 +412,17 @@ class AssistantNodes:
         for item in memories[:5]:
             prefix = f"[{item.score:.2f}] " if item.score is not None else ""
             lines.append(f"- {prefix}{item.text}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _summarize_poi_results(poi_results: list[dict[str, Any]]) -> str:
+        lines = ["附近兴趣点："]
+        for item in poi_results[:5]:
+            name = item.get("name") or "POI"
+            category = item.get("category") or ""
+            distance = item.get("distance_m")
+            dist_text = f"（约 {int(distance)} 米）" if distance is not None else ""
+            lines.append(f"- {name} {category}{dist_text}".strip())
         return "\n".join(lines)
 
     @staticmethod
@@ -384,6 +456,8 @@ class AssistantNodes:
 
     @staticmethod
     def _build_fallback_answer(state: AssistantState, context_text: str) -> str:
+        if state.poi_results:
+            return f"基于当前位置为你找到的附近地点：\n{context_text}"
         if state.tool_result:
             return f"基于工具 {state.selected_tool or ''} 的结果：\n{context_text}"
         if state.trip_data:
@@ -392,6 +466,17 @@ class AssistantNodes:
         if state.memories:
             return f"结合你的记忆（{len(state.memories)} 条），建议：\n{context_text}"
         return f"关于“{state.query}”暂时没有额外上下文，建议提供更多细节。"
+
+    @staticmethod
+    def _guess_poi_type(query: str) -> str | None:
+        lowered = query.lower()
+        if any(keyword in lowered for keyword in ["吃", "餐", "美食", "food"]):
+            return "food"
+        if any(keyword in lowered for keyword in ["景点", "景区", "游玩", "sight"]):
+            return "sight"
+        if any(keyword in lowered for keyword in ["住", "酒店", "hotel"]):
+            return "hotel"
+        return None
 
     @staticmethod
     def _extract_final_text(agent_result: Any) -> str | None:

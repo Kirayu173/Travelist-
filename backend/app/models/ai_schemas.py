@@ -7,6 +7,14 @@ from app.ai.memory_models import MemoryItem, MemoryLevel
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+def _strip_non_empty_query(value: str) -> str:
+    value = value.strip()
+    if not value:
+        msg = "query must not be empty"
+        raise ValueError(msg)
+    return value
+
+
 class ChatDemoPayload(BaseModel):
     user_id: int = Field(..., ge=1)
     trip_id: int | None = Field(default=None, ge=1)
@@ -23,11 +31,7 @@ class ChatDemoPayload(BaseModel):
     @field_validator("query")
     @classmethod
     def strip_query(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            msg = "query must not be empty"
-            raise ValueError(msg)
-        return value
+        return _strip_non_empty_query(value)
 
     @field_validator("session_id")
     @classmethod
@@ -63,15 +67,14 @@ class ChatPayload(BaseModel):
     return_tool_traces: bool = True
     return_messages: bool = True
     stream: bool = False
+    location: dict[str, Any] | None = Field(default=None, description="用户当前位置 {lat,lng}")
+    poi_type: str | None = Field(default=None, description="POI 类型（food/sight/...）")
+    poi_radius: int | None = Field(default=None, ge=1, description="POI 检索半径（米）")
 
     @field_validator("query")
     @classmethod
     def strip_query(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            msg = "query must not be empty"
-            raise ValueError(msg)
-        return value
+        return _strip_non_empty_query(value)
 
 
 class ChatMessageSchema(BaseModel):

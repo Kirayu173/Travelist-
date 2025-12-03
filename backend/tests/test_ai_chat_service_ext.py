@@ -91,7 +91,6 @@ def test_chat_demo_streams_chunks_when_requested():
     async def _on_chunk(chunk):
         chunks.append(chunk.delta)
 
-    payload_dict = payload.model_dump()
     # run stream path
     result = asyncio.get_event_loop().run_until_complete(
         service.run_chat(payload.copy(update={"stream": True}), stream_handler=_on_chunk)

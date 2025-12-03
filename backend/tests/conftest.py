@@ -40,6 +40,8 @@ def configure_admin_and_ai() -> None:
     settings.ai_provider = "mock"
     settings.ai_model_chat = "mock-test"
     settings.mem0_mode = "disabled"
+    settings.poi_provider = "mock"
+    settings.poi_cache_enabled = False
     reset_ai_client()
 
 

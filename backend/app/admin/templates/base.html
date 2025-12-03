@@ -44,6 +44,10 @@
                 <svg class="w-5 h-5 mr-3 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m-6-6h12"></path></svg>
                 记忆浏览
             </a>
+            <a href="/admin/poi/overview" class="flex items-center px-3 py-2.5 rounded-lg hover:bg-slate-800 group transition-colors {% if request.url.path.startswith('/admin/poi') %}bg-blue-600 text-white shadow-lg shadow-blue-900/50{% else %}text-slate-300{% endif %}">
+                <svg class="w-5 h-5 mr-3 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h18v4H3zM3 9h18v4H3zM3 15h18v4H3z"></path></svg>
+                POI 监控
+            </a>
 
             <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-3 mt-6">系统</div>
             <a href="/admin/api-docs" class="flex items-center px-3 py-2.5 rounded-lg hover:bg-slate-800 group transition-colors {% if request.url.path == '/admin/api-docs' %}bg-blue-600 text-white shadow-lg shadow-blue-900/50{% else %}text-slate-300{% endif %}">

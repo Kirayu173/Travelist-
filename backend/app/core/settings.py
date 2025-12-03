@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     cache_namespace: str = "cache"
 
     gaode_key: str | None = None
+    poi_provider: Literal["mock", "gaode"] = "mock"
+    poi_gaode_api_key: str | None = None
+    poi_default_radius_m: int = 2000
+    poi_max_radius_m: int = 5000
+    poi_cache_ttl_seconds: int = 600
+    poi_coord_precision: int = 4
+    poi_cache_enabled: bool = True
+    poi_min_results: int = 8
     llm_provider: str | None = None
     llm_api_key: str | None = None
     ai_provider: str | None = None

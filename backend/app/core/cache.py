@@ -157,36 +157,6 @@ class RedisCacheBackend(CacheBackend):
         except RedisError:
             return
 
-    def remember(
-        self,
-        namespace: str,
-        key: str,
-        ttl_seconds: int,
-        loader: Callable[[], Any],
-    ) -> Any:
-        cached = self.get(namespace, key)
-        if cached is not None:
-            return cached
-        value = loader()
-        self.set(namespace, key, value, ttl_seconds)
-        return value
-
-    async def remember_async(
-        self,
-        namespace: str,
-        key: str,
-        ttl_seconds: int,
-        loader: Callable[[], Any | Awaitable[Any]],
-    ) -> Any:
-        cached = self.get(namespace, key)
-        if cached is not None:
-            return cached
-        value = loader()
-        if inspect.isawaitable(value):
-            value = await value
-        self.set(namespace, key, value, ttl_seconds)
-        return value
-
 
 def _init_cache_backend() -> CacheBackend:
     provider = getattr(settings, "cache_provider", "memory")

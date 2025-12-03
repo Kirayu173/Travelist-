@@ -57,6 +57,23 @@ class _StubTripService:
         return Trip()
 
 
+class _StubPoiService:
+    async def get_poi_around(self, **kwargs):
+        return (
+            [
+                {
+                    "name": "Stub POI",
+                    "provider": "mock",
+                    "provider_id": "stub",
+                    "lat": 0.0,
+                    "lng": 0.0,
+                    "distance_m": 10,
+                }
+            ],
+            {"source": "mock"},
+        )
+
+
 def test_tool_registry_contains_expected_tools():
     registry = build_tool_registry()
     assert set(registry.names()) == {
@@ -105,6 +122,7 @@ async def test_assistant_graph_runs_with_tool_execution():
         trip_service=_StubTripService(),
         tool_selector=selector,
         tool_registry=registry,
+        poi_service=_StubPoiService(),
     )
     graph = build_assistant_graph(nodes)
     state = AssistantState(

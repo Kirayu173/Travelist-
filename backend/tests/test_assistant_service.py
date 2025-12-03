@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 from app.ai.memory_models import MemoryLevel
 from app.models.ai_schemas import ChatPayload
@@ -96,4 +94,3 @@ async def test_write_memory_defaults_to_user_level(monkeypatch):
 
     await service._write_memory(payload=payload, session_id=0, answer="答复")
     assert stub.calls[-1]["level"] is MemoryLevel.user
-

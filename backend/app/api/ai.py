@@ -23,6 +23,33 @@ def _assistant_service() -> AssistantService:
     return get_assistant_service()
 
 
+async def _enqueue_sse_chunk(queue: asyncio.Queue[str], chunk: AiStreamChunk) -> None:
+    if not chunk.delta and not chunk.done:
+        return
+    event = {
+        "event": "chunk",
+        "trace_id": chunk.trace_id,
+        "index": chunk.index,
+        "delta": chunk.delta,
+        "done": chunk.done,
+    }
+    await queue.put(_format_sse(event))
+
+
+async def _event_stream(queue: asyncio.Queue[str], producer_task: asyncio.Task):
+    try:
+        while True:
+            chunk = await queue.get()
+            yield chunk
+            if chunk.strip().endswith("[DONE]"):
+                break
+    finally:
+        if not producer_task.done():
+            producer_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await producer_task
+
+
 @router.post(
     "/chat_demo",
     summary="AI 问答演示",
@@ -75,16 +102,7 @@ async def _stream_chat(
     queue: asyncio.Queue[str] = asyncio.Queue()
 
     async def on_chunk(chunk: AiStreamChunk) -> None:
-        if not chunk.delta and not chunk.done:
-            return
-        event = {
-            "event": "chunk",
-            "trace_id": chunk.trace_id,
-            "index": chunk.index,
-            "delta": chunk.delta,
-            "done": chunk.done,
-        }
-        await queue.put(_format_sse(event))
+        await _enqueue_sse_chunk(queue, chunk)
 
     async def producer() -> None:
         try:
@@ -112,21 +130,9 @@ async def _stream_chat(
             await queue.put("data: [DONE]\n\n")
 
     producer_task = asyncio.create_task(producer())
-
-    async def event_stream():
-        try:
-            while True:
-                chunk = await queue.get()
-                yield chunk
-                if chunk.strip().endswith("[DONE]"):
-                    break
-        finally:
-            if not producer_task.done():
-                producer_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await producer_task
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _event_stream(queue, producer_task), media_type="text/event-stream"
+    )
 
 
 async def _stream_assistant(
@@ -136,16 +142,7 @@ async def _stream_assistant(
     queue: asyncio.Queue[str] = asyncio.Queue()
 
     async def on_chunk(chunk: AiStreamChunk) -> None:
-        if not chunk.delta and not chunk.done:
-            return
-        event = {
-            "event": "chunk",
-            "trace_id": chunk.trace_id,
-            "index": chunk.index,
-            "delta": chunk.delta,
-            "done": chunk.done,
-        }
-        await queue.put(_format_sse(event))
+        await _enqueue_sse_chunk(queue, chunk)
 
     async def producer() -> None:
         try:
@@ -182,21 +179,9 @@ async def _stream_assistant(
             await queue.put("data: [DONE]\n\n")
 
     producer_task = asyncio.create_task(producer())
-
-    async def event_stream():
-        try:
-            while True:
-                chunk = await queue.get()
-                yield chunk
-                if chunk.strip().endswith("[DONE]"):
-                    break
-        finally:
-            if not producer_task.done():
-                producer_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await producer_task
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _event_stream(queue, producer_task), media_type="text/event-stream"
+    )
 
 
 def _format_sse(payload: dict) -> str:

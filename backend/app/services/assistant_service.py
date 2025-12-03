@@ -16,6 +16,7 @@ from app.core.settings import settings
 from app.models.ai_schemas import ChatMessageSchema, ChatPayload, ChatResult
 from app.models.orm import ChatSession, Message
 from app.services.memory_service import MemoryService, get_memory_service
+from app.services.poi_service import PoiService, get_poi_service
 from app.services.trip_service import TripQueryService
 
 
@@ -28,10 +29,12 @@ class AssistantService:
         memory_service: MemoryService | None = None,
         trip_service: TripQueryService | None = None,
         tool_registry: ToolRegistry | None = None,
+        poi_service: PoiService | None = None,
     ) -> None:
         self._ai_client = get_ai_client()
         self._memory_service = memory_service or get_memory_service()
         self._trip_service = trip_service or TripQueryService()
+        self._poi_service = poi_service or get_poi_service()
         self._prompt_registry = get_prompt_registry()
         self._tool_registry = tool_registry or build_tool_registry()
         self._tool_selector = ToolSelector(
@@ -47,6 +50,7 @@ class AssistantService:
             trip_service=self._trip_service,
             tool_selector=self._tool_selector,
             tool_registry=self._tool_registry,
+            poi_service=self._poi_service,
             tool_agent=self._tool_agent,
         )
         self._graph = build_assistant_graph(nodes)
@@ -65,6 +69,11 @@ class AssistantService:
         memory_level = self._resolve_memory_level(
             payload, client_supplied_session=client_supplied_session
         )
+        poi_query = {}
+        if payload.poi_type:
+            poi_query["type"] = payload.poi_type
+        if payload.poi_radius:
+            poi_query["radius"] = payload.poi_radius
         state = AssistantState(
             user_id=payload.user_id,
             trip_id=payload.trip_id,
@@ -74,6 +83,8 @@ class AssistantService:
             top_k=max_k,
             history=history,
             memory_level=memory_level,
+            location=payload.location,
+            poi_query=poi_query or None,
         )
         self._logger.info(
             "assistant.enter",

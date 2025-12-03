@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 
 {% block title %}仪表盘 - Travelist Admin{% endblock %}
-{% block header %}管理面板 ? 开发进度概览 (Stage 4){% endblock %}
+{% block header %}管理面板 · 阶段进度概览{% endblock %}
 
 {% block content %}
 <div class="mb-6">
     <h1 class="text-2xl font-bold text-slate-800">管理面板</h1>
-    <p class="text-slate-500 mt-1">Stage 4 AI 监控与行程数据概览</p>
+    <p class="text-slate-500 mt-1">AI / 行程 / POI 关键指标</p>
 </div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
     <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 relative overflow-hidden group">
         <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-50 rounded-full group-hover:scale-110 transition-transform"></div>
         <div class="relative">
             <div class="text-slate-500 text-sm font-medium mb-1">AI 总调用</div>
             <div class="text-3xl font-bold text-slate-800" id="metric-ai-total">-</div>
             <div class="text-xs text-green-600 mt-2 flex items-center">
-                <span class="bg-green-100 px-1.5 py-0.5 rounded mr-1">↑</span> 实时更新
+                <span class="bg-green-100 px-1.5 py-0.5 rounded mr-1">●</span> 实时更新
             </div>
         </div>
     </div>
@@ -41,9 +41,18 @@
     <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 relative overflow-hidden">
         <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-50 rounded-full"></div>
         <div class="relative">
-            <div class="text-slate-500 text-sm font-medium mb-1">系统健康度</div>
-            <div class="text-3xl font-bold text-emerald-600">100%</div>
+            <div class="text-slate-500 text-sm font-medium mb-1">系统健康状况</div>
+            <div class="text-3xl font-bold text-emerald-600" id="metric-health">-</div>
             <div class="text-xs text-slate-400 mt-2">PostgreSQL / Redis / Mem0</div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 relative overflow-hidden">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-teal-50 rounded-full"></div>
+        <div class="relative">
+            <div class="text-slate-500 text-sm font-medium mb-1">POI 缓存命中</div>
+            <div class="text-3xl font-bold text-teal-700" id="metric-poi-hit">-</div>
+            <div class="text-xs text-slate-400 mt-2" id="metric-poi-api">API 调用 -</div>
         </div>
     </div>
 </div>
@@ -51,7 +60,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col">
         <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-            <h3 class="font-semibold text-slate-800">最近 AI 调用 (Trace Log)</h3>
+            <h3 class="font-semibold text-slate-800">最新 AI 调用 (Trace Log)</h3>
             <button onclick="loadData()" class="text-sm text-blue-600 hover:text-blue-800">刷新</button>
         </div>
         <div class="overflow-x-auto">
@@ -75,30 +84,26 @@
     <div class="space-y-6">
         <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
             <h3 class="text-lg font-bold mb-2">试运行 AI 助手</h3>
-            <p class="text-blue-100 text-sm mb-4">测试 LLM 连接与 mem0 记忆读写功能是否正常。</p>
+            <p class="text-blue-100 text-sm mb-4">测试 LLM 连接与 mem0 记忆读写功能。</p>
             <a href="/admin/ai/console" class="inline-block bg-white text-blue-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors">
-                进入调试台 →
+                进入调试台
             </a>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
-            <h3 class="font-semibold text-slate-800 mb-4">Stage 4 待办检查</h3>
+            <h3 class="font-semibold text-slate-800 mb-4">Stage 6 关键项</h3>
             <ul class="space-y-3 text-sm">
                 <li class="flex items-center text-slate-600">
                     <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
-                    AI Client 基础封装
+                    POI 服务 + Redis 缓存
                 </li>
                 <li class="flex items-center text-slate-600">
                     <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
-                    mem0 接入 (Local/PG)
+                    LangGraph PoiNode 接入
                 </li>
                 <li class="flex items-center text-slate-600">
                     <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
-                    /api/ai/chat_demo 接口
-                </li>
-                <li class="flex items-center text-slate-600">
-                    <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
-                    Admin 监控面板 (Doing)
+                    Admin POI 监控
                 </li>
             </ul>
         </div>
@@ -110,25 +115,23 @@
 <script>
     async function loadData() {
         try {
-            // 假设后端实现了 /admin/ai/summary，如果未实现，这里会报错
-            const res = await fetch('/admin/ai/summary');
-            if (!res.ok) throw new Error('API Failed');
-            const json = await res.json();
-            
-            if (json.code === 0 && json.data) {
-                const d = json.data;
-                // 更新数字
+            const [aiRes, poiRes] = await Promise.all([
+                fetch('/admin/ai/summary'),
+                fetch('/admin/poi/summary'),
+            ]);
+            const aiJson = await aiRes.json();
+            const poiJson = await poiRes.json();
+
+            if (aiJson.code === 0 && aiJson.data) {
+                const d = aiJson.data;
                 document.getElementById('metric-ai-total').innerText = d.ai_calls_total ?? 0;
                 document.getElementById('metric-ai-latency').innerText = (d.avg_latency_ms ?? 0).toFixed(0);
                 document.getElementById('metric-mem-count').innerText = d.mem0_calls_total ?? 0;
-                
                 if (d.mem0_errors > 0) {
                     document.getElementById('metric-mem-errors').innerHTML = `<span class="text-red-500">⚠️ ${d.mem0_errors} errors</span>`;
                 } else {
                     document.getElementById('metric-mem-errors').innerText = '无错误';
                 }
-
-                // 更新表格
                 const tbody = document.getElementById('logs-table-body');
                 tbody.innerHTML = '';
                 const logs = d.last_10_calls || [];
@@ -136,34 +139,39 @@
                     tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-slate-400">暂无记录</td></tr>';
                 } else {
                     logs.forEach(log => {
-                        const statusClass = log.success 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-red-100 text-red-700';
+                        const statusClass = log.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
                         const statusText = log.success ? 'Success' : 'Failed';
-                        const date = new Date(log.timestamp).toLocaleTimeString();
-                        
+                        const date = new Date(log.timestamp || log.recorded_at).toLocaleTimeString();
                         const row = `
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="px-6 py-3 text-slate-600 font-mono text-xs">${date}</td>
-                            <td class="px-6 py-3 font-mono text-xs text-slate-500" title="${log.trace_id}">${log.trace_id.substring(0,12)}...</td>
+                            <td class="px-6 py-3 font-mono text-xs text-slate-500" title="${log.trace_id}">${(log.trace_id || '').substring(0,12)}...</td>
                             <td class="px-6 py-3 text-slate-700">${log.model}</td>
-                            <td class="px-6 py-3 text-slate-600">${log.latency_ms.toFixed(0)}ms</td>
+                            <td class="px-6 py-3 text-slate-600">${(log.latency_ms ?? 0).toFixed(0)}ms</td>
                             <td class="px-6 py-3">
                                 <span class="${statusClass} px-2 py-0.5 rounded text-xs font-medium">${statusText}</span>
                             </td>
-                        </tr>
-                        `;
+                        </tr>`;
                         tbody.innerHTML += row;
                     });
                 }
             }
+
+            if (poiJson.code === 0 && poiJson.data) {
+                const p = poiJson.data;
+                const hits = p.cache_hits ?? 0;
+                const misses = p.cache_misses ?? 0;
+                const total = hits + misses || 1;
+                const rate = ((hits / total) * 100).toFixed(1);
+                document.getElementById('metric-poi-hit').innerText = `${rate}%`;
+                document.getElementById('metric-poi-api').innerText = `API 调用 ${p.api_calls ?? 0}，失败 ${p.api_failures ?? 0}`;
+            }
+            document.getElementById('metric-health').innerText = 'OK';
         } catch (e) {
             console.error("Failed to load summary", e);
-            // 优雅降级显示，不弹窗干扰
         }
     }
 
-    // 页面加载时拉取，每 10s 自动刷新
     loadData();
     setInterval(loadData, 10000);
 </script>

@@ -80,6 +80,18 @@ def test_admin_db_and_redis_status_endpoints_return_payload(client):
     assert "status" in redis_resp.json()["data"]
 
 
+def test_admin_poi_summary_requires_auth(client):
+    resp = client.get("/admin/poi/summary")
+    assert resp.status_code == 401
+
+
+def test_admin_poi_summary_returns_payload(client):
+    resp = client.get("/admin/poi/summary", headers=_admin_headers())
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert "pois_total" in data
+
+
 def test_admin_memory_page_renders(client):
     resp = client.get("/admin/ai/memories")
     assert resp.status_code == 200

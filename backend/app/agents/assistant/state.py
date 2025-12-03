@@ -19,6 +19,9 @@ class AssistantState(BaseModel):
     memories: list[MemoryItem] = Field(default_factory=list)
     trip_data: dict[str, Any] | None = None
     memory_level: MemoryLevel | None = None
+    location: dict[str, Any] | None = None
+    poi_query: dict[str, Any] | None = None
+    poi_results: list[dict[str, Any]] = Field(default_factory=list)
 
     selected_tool: str | None = None
     selected_tool_reason: str | None = None
