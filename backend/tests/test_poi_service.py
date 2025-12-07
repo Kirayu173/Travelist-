@@ -49,7 +49,7 @@ async def test_poi_service_cache_hit(monkeypatch):
     service = PoiService(cache_ttl_seconds=10)
     monkeypatch.setattr(service, "_redis", None)
     data = [{"name": "缓存POI", "provider": "mock", "provider_id": "cache", "lat": 0, "lng": 0}]
-    key = service._build_cache_key(0, 0, None, 1000)
+    key = service._build_cache_key(0, 0, None, 1000, 50)
     await service._cache_set(key, data)
     results, meta = await service.get_poi_around(lat=0, lng=0, poi_type=None, radius=1000)
     assert meta["source"] == "cache"

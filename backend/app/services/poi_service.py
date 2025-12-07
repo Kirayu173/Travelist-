@@ -187,12 +187,12 @@ class PoiService:
         return round(value, precision)
 
     def _build_cache_key(
-        self, lat: float, lng: float, poi_type: str | None, radius: int
+        self, lat: float, lng: float, poi_type: str | None, radius: int, limit: int
     ) -> str:
         lat_q = self._normalize_coord(lat)
         lng_q = self._normalize_coord(lng)
         type_q = poi_type or "all"
-        return f"poi:around:{lat_q}:{lng_q}:{type_q}:{radius}"
+        return f"poi:around:{lat_q}:{lng_q}:{type_q}:{radius}:{limit}"
 
     async def _cache_get(self, key: str) -> list[dict[str, Any]] | None:
         if self._redis:
@@ -244,7 +244,9 @@ class PoiService:
         lat, lng, resolved_radius, normalized_type = self._validate_inputs(
             lat, lng, radius, poi_type
         )
-        cache_key = self._build_cache_key(lat, lng, normalized_type, resolved_radius)
+        cache_key = self._build_cache_key(
+            lat, lng, normalized_type, resolved_radius, limit
+        )
         cached = await self._cache_get(cache_key)
         if cached is not None:
             return cached, {"source": "cache"}
