@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     poi_cache_enabled: bool = True
     poi_min_results: int = 8
 
+    geocode_provider: Literal["disabled", "mock", "amap"] = Field(
+        default="mock",
+        validation_alias="GEOCODE_PROVIDER",
+    )
+    geocode_cache_ttl_seconds: int = Field(
+        default=86400,
+        validation_alias="GEOCODE_CACHE_TTL_SECONDS",
+    )
+    amap_api_key: str | None = Field(default=None, validation_alias="AMAP_API_KEY")
+
     plan_default_day_start: str = Field(
         default="09:00", validation_alias="PLAN_DEFAULT_DAY_START"
     )
@@ -48,6 +58,22 @@ class Settings(BaseSettings):
     )
     plan_fast_transport_mode: Literal["walk", "bike", "drive", "transit"] = Field(
         default="walk", validation_alias="PLAN_FAST_TRANSPORT_MODE"
+    )
+    plan_metrics_backend: Literal["memory", "redis"] = Field(
+        default="memory",
+        validation_alias="PLAN_METRICS_BACKEND",
+    )
+    plan_metrics_namespace: str = Field(
+        default="plan_metrics",
+        validation_alias="PLAN_METRICS_NAMESPACE",
+    )
+    plan_metrics_history_limit: int = Field(
+        default=100,
+        validation_alias="PLAN_METRICS_HISTORY_LIMIT",
+    )
+    plan_metrics_latency_limit: int = Field(
+        default=500,
+        validation_alias="PLAN_METRICS_LATENCY_LIMIT",
     )
     llm_provider: str | None = None
     llm_api_key: str | None = None
@@ -79,15 +105,36 @@ class Settings(BaseSettings):
     mem0_fallback_max_entries_per_ns: int = 500
     mem0_fallback_max_total_entries: int = 5000
 
-    jwt_secret: str = "change_me"
+    jwt_secret: str = Field(
+        default="change_me",
+        validation_alias=AliasChoices("JWT_SECRET", "SECRET_KEY"),
+    )
     jwt_alg: str = "HS256"
-    jwt_expire_min: int = 60
+    jwt_expire_min: int = Field(
+        default=60,
+        validation_alias=AliasChoices(
+            "JWT_EXPIRE_MIN",
+            "ACCESS_TOKEN_EXPIRE_MINUTES",
+        ),
+    )
     log_level: str = "INFO"
     log_directory: str = "logs"
     log_max_bytes: int = 2 * 1024 * 1024
     log_backup_count: int = 5
     admin_api_token: str | None = None
     admin_allowed_ips: list[str] | str | None = Field(default=None)
+    admin_sql_console_enabled: bool = Field(
+        default=False,
+        validation_alias="ADMIN_SQL_CONSOLE_ENABLED",
+    )
+    admin_sql_console_timeout_ms: int = Field(
+        default=1500,
+        validation_alias="ADMIN_SQL_CONSOLE_TIMEOUT_MS",
+    )
+    admin_sql_console_max_rows: int = Field(
+        default=100,
+        validation_alias="ADMIN_SQL_CONSOLE_MAX_ROWS",
+    )
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

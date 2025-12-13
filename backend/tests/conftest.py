@@ -38,6 +38,9 @@ def configure_admin_and_ai() -> None:
 
     settings.admin_api_token = "test-admin-token"
     settings.admin_allowed_ips = []
+    settings.admin_sql_console_enabled = True
+    settings.admin_sql_console_timeout_ms = 1500
+    settings.admin_sql_console_max_rows = 100
     settings.ai_provider = "mock"
     settings.ai_model_chat = "mock-test"
     settings.mem0_mode = "disabled"

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import random
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
@@ -14,6 +13,7 @@ from app.core.settings import settings
 from app.models.orm import TransportMode
 from app.models.plan_schemas import PlanRequest, PlanTripSchema
 from app.models.schemas import DayCardCreate, SubTripCreate, TripCreate
+from app.services.geocode_service import GeocodeService, get_geocode_service
 from app.services.poi_service import PoiService, get_poi_service
 
 
@@ -63,15 +63,6 @@ def _minutes_to_time(minutes: int) -> time:
     return time(hour=hour, minute=minute)
 
 
-def _pseudo_city_center(destination: str) -> tuple[float, float]:
-    digest = hashlib.md5(destination.encode("utf-8")).hexdigest()
-    n1 = int(digest[:8], 16)
-    n2 = int(digest[8:16], 16)
-    lat = 20.0 + (n1 % 1500) / 100.0  # 20.00 ~ 35.00
-    lng = 100.0 + (n2 % 2500) / 100.0  # 100.00 ~ 125.00
-    return lat, lng
-
-
 def _transport_mode(value: str | None) -> TransportMode | None:
     if not value:
         return None
@@ -86,8 +77,14 @@ class FastPlanner:
 
     RULES_VERSION = "fast_rules_v1"
 
-    def __init__(self, *, poi_service: PoiService | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        poi_service: PoiService | None = None,
+        geocode_service: GeocodeService | None = None,
+    ) -> None:
         self._poi_service = poi_service or get_poi_service()
+        self._geocode_service = geocode_service or get_geocode_service()
         self._logger = get_logger(__name__)
 
     async def plan(self, request: PlanRequest) -> tuple[PlanTripSchema, dict[str, Any]]:
@@ -272,7 +269,8 @@ class FastPlanner:
 
         db_candidates = self._query_destination_candidates(destination, limit=limit * 2)
 
-        lat, lng = _pseudo_city_center(destination)
+        center = await self._geocode_service.resolve_city_center(destination)
+        lat, lng = center.lat, center.lng
         sources_counter: dict[str, int] = {}
         api_candidates: list[dict[str, Any]] = []
         for interest in interests[:6]:
@@ -339,7 +337,12 @@ class FastPlanner:
         return merged[:limit], {
             "sources": sources_counter,
             "latency_ms": round(elapsed_ms, 3),
-            "destination_center": {"lat": lat, "lng": lng},
+            "destination_center": {
+                "lat": lat,
+                "lng": lng,
+                "provider": center.provider,
+                "source": center.source,
+            },
         }
 
     def _query_destination_candidates(

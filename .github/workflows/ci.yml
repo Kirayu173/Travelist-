@@ -9,6 +9,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: travelist
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d travelist"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/travelist
+      PYTEST_FAST_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,9 +36,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev]
       - name: Ruff
-        run: ruff check backend
+        run: ruff check backend/app backend/tests backend/prod_tests
       - name: Black
-        run: black --check backend
+        run: black --check backend/app backend/tests backend/prod_tests
       - name: Pytest
         run: |
           cd backend

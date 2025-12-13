@@ -1,6 +1,6 @@
 # Travelist+ Backend
 
-当前阶段：**Stage-6（POI/Redis 缓存 + 智能助手增强）**
+当前阶段：**Stage-7（行程规划 Fast 模式 + PlannerGraph + Admin 可观测）**
 
 ## 快速开始
 ```bash
@@ -24,8 +24,11 @@ cd backend
 python -m pytest --cov=app --cov-report=xml
 
 # 代码质量
-python -m ruff check backend
-python -m black backend --check
+python -m ruff check backend/app backend/tests
+python -m black backend/app backend/tests --check
+
+# Stage-7 冒烟（需服务已启动，并配置 ADMIN_API_TOKEN）
+ADMIN_API_TOKEN=please-change-admin-token python scripts/smoke_stage7.py --base-url http://127.0.0.1:8000
 ```
 
 ## Docker Compose（可选）

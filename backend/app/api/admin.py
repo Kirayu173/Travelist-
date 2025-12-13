@@ -8,6 +8,7 @@ from app.admin.auth import AdminAuthError, verify_admin_access
 from app.admin.schemas import ApiTestRequest
 from app.ai.memory_models import MemoryLevel
 from app.core.db import get_db
+from app.core.logging import get_logger
 from app.core.settings import settings
 from app.models.ai_schemas import PromptUpdatePayload
 from app.services.memory_service import get_memory_service
@@ -18,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 async def admin_auth_exception_handler(
@@ -128,17 +130,51 @@ def run_sql_test(
     Execute a raw SQL query for debugging (RESTRICTED).
     Only allows SELECT queries.
     """
+    if not settings.admin_sql_console_enabled:
+        raise HTTPException(404, "SQL console is disabled.")
+
     query = payload.get("query", "").strip()
     if not query:
-        return success_response({"error": "Empty query"})
+        raise HTTPException(400, "Empty query.")
 
     if not query.lower().startswith("select"):
         raise HTTPException(400, "Only SELECT queries are allowed in this console.")
     if ";" in query:
         raise HTTPException(400, "Multiple statements are not allowed.")
+    if "--" in query or "/*" in query or "*/" in query:
+        raise HTTPException(400, "SQL comments are not allowed.")
+
+    lowered = query.lower()
+    banned = (
+        "pg_sleep",
+        "copy",
+        "create ",
+        "alter ",
+        "drop ",
+        "insert ",
+        "update ",
+        "delete ",
+    )
+    if any(token in lowered for token in banned):
+        raise HTTPException(400, "Dangerous SQL keywords are not allowed.")
+
+    max_rows = max(int(settings.admin_sql_console_max_rows), 1)
+    if " limit " not in f" {lowered} ":
+        query = f"{query} LIMIT {max_rows}"
+    timeout_ms = max(int(settings.admin_sql_console_timeout_ms), 100)
+    timeout_ms = min(timeout_ms, 60_000)
 
     try:
-        # Execute synchronously
+        logger.info(
+            "admin.sql_test",
+            extra={
+                "client": (request.client.host if request.client else None),
+                "timeout_ms": timeout_ms,
+                "max_rows": max_rows,
+                "query_len": len(query),
+            },
+        )
+        db.execute(text(f"SET LOCAL statement_timeout = {timeout_ms}"))
         result = db.execute(text(query))
         keys = list(result.keys())
         rows = result.fetchall()
@@ -149,12 +185,24 @@ def run_sql_test(
         return success_response(
             {
                 "columns": keys,
-                "rows": data[:100],  # Limit to 100 rows
+                "rows": data[:max_rows],
                 "count": len(data),
+                "limit": max_rows,
             }
         )
-    except Exception as e:
-        return success_response({"error": str(e)})
+    except Exception as exc:
+        logger.warning(
+            "admin.sql_test_failed",
+            extra={"error": str(exc)},
+        )
+        return JSONResponse(
+            status_code=400,
+            content=error_response(
+                "SQL execution failed.",
+                code=2002,
+                data={"error": str(exc)},
+            ),
+        )
 
 
 # --- Existing Admin Service Routes ---

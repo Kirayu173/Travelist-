@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as dt_date
+from datetime import datetime as dt_datetime
 from typing import Any, Literal
 
 from app.models.orm import TransportMode
@@ -117,5 +118,29 @@ class PlanResponseData(BaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
     tool_traces: list[dict[str, Any]] = Field(default_factory=list)
     trace_id: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+PlanTaskStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
+
+
+class PlanTaskSchema(BaseModel):
+    """Stage-8 预设：异步 deep 规划任务状态结构（Stage-7 不落库、不执行）。"""
+
+    task_id: str
+    status: PlanTaskStatus
+    mode: PlanMode
+    async_: bool = Field(
+        default=True,
+        validation_alias="async",
+        serialization_alias="async",
+    )
+    request_id: str | None = None
+    seed_mode: SeedMode | None = None
+    created_at: dt_datetime
+    updated_at: dt_datetime
+    result: PlanTripSchema | None = None
+    error: dict[str, Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True)

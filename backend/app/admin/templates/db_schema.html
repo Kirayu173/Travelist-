@@ -8,7 +8,11 @@
     
     <div class="flex space-x-1 bg-slate-200 p-1 rounded-lg w-fit">
         <button onclick="switchTab('schema')" id="tab-btn-schema" class="px-4 py-2 text-sm font-medium rounded-md bg-white text-slate-800 shadow-sm transition-all">表结构 (Schema)</button>
+        {% if settings.admin_sql_console_enabled %}
         <button onclick="switchTab('console')" id="tab-btn-console" class="px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-800 hover:bg-white/50 transition-all">SQL 调试台</button>
+        {% else %}
+        <button id="tab-btn-console" class="px-4 py-2 text-sm font-medium rounded-md text-slate-400 cursor-not-allowed bg-slate-100" title="SQL 调试台已禁用（设置 ADMIN_SQL_CONSOLE_ENABLED=true 启用）">SQL 调试台</button>
+        {% endif %}
     </div>
 
     <div id="tab-schema" class="flex-1 overflow-y-auto space-y-6">
@@ -104,6 +108,9 @@
             btnSchema.className = "px-4 py-2 text-sm font-medium rounded-md bg-white text-slate-800 shadow-sm transition-all";
             btnConsole.className = "px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-800 hover:bg-white/50 transition-all";
         } else {
+            {% if not settings.admin_sql_console_enabled %}
+            return;
+            {% endif %}
             schemaView.classList.add('hidden');
             consoleView.classList.remove('hidden');
             consoleView.classList.add('flex'); // Console needs flex layout
@@ -141,7 +148,7 @@
                     status.innerText = `${json.data.count} rows fetched`;
                 }
             } else {
-                renderError(json.msg || "Unknown error");
+                renderError(json.msg || json.detail || "Unknown error");
             }
         } catch (e) {
             renderError(e.message);

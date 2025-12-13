@@ -1,0 +1,8 @@
+INFO:     Started server process [7420]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8005 (Press CTRL+C to quit)
+2025-12-14 01:06:26 | INFO | app.agents.planner.nodes | planner.node
+2025-12-14 01:06:26 | INFO | app.agents.planner.nodes | planner.node
+2025-12-14 01:06:26 | INFO | app.agents.planner.nodes | planner.node
+2025-12-14 01:06:26 | INFO | app.agents.planner.nodes | planner.node
