@@ -18,5 +18,8 @@ pip-wheel-metadata/
 ehthumbs.db
 Thumbs.db
 logs/
-scripts/
+scripts/*
+!scripts/seed_stage2_data.py
+!scripts/test_connections.py
+!scripts/smoke_stage7.py
 pois_data/
