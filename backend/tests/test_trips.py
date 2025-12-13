@@ -228,7 +228,9 @@ def test_create_sub_trip_respects_order_index(client):
     assert insert_resp.status_code == 200
 
     detail = client.get(f"/api/trips/{trip_id}").json()["data"]
-    day0_detail = next(card for card in detail["day_cards"] if card["id"] == day_card_id)
+    day0_detail = next(
+        card for card in detail["day_cards"] if card["id"] == day_card_id
+    )
     names = [item["activity"] for item in day0_detail["sub_trips"]]
     order_indexes = [item["order_index"] for item in day0_detail["sub_trips"]]
     assert names[:3] == ["早茶", "早餐", "午餐"]
@@ -241,7 +243,9 @@ def test_create_sub_trip_respects_order_index(client):
     )
     assert append_resp.status_code == 200
     detail = client.get(f"/api/trips/{trip_id}").json()["data"]
-    day0_detail = next(card for card in detail["day_cards"] if card["id"] == day_card_id)
+    day0_detail = next(
+        card for card in detail["day_cards"] if card["id"] == day_card_id
+    )
     assert day0_detail["sub_trips"][-1]["activity"] == "晚餐"
     assert day0_detail["sub_trips"][-1]["order_index"] == 3
 

@@ -480,7 +480,7 @@ class SubTripService(TripServiceBase):
             session.add(sub_trip)
             session.flush()
             session.refresh(sub_trip)
-            # Insert into in-memory list and reindex in two phases to avoid unique collisions
+            # Insert into in-memory list and reindex to avoid unique collisions.
             existing.insert(target_index, sub_trip)
             self._reindex(session, existing)
             # reload with relationships for response
@@ -499,7 +499,6 @@ class SubTripService(TripServiceBase):
             },
         )
         return schema
-
 
     def update_sub_trip(
         self, sub_trip_id: int, payload: SubTripUpdate

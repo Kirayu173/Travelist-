@@ -37,7 +37,7 @@ DEFAULT_PROMPTS: dict[str, PromptTemplate] = {
         role="system",
         content=(
             "根据用户的问题判断意图 intent，可选值：trip_query（查询行程）或 "
-            'general_qa（常规问答）。仅输出 JSON: '
+            "general_qa（常规问答）。仅输出 JSON: "
             '{"intent": "trip_query" | "general_qa", "reason": "..."}'
         ),
     ),
@@ -63,7 +63,8 @@ DEFAULT_PROMPTS: dict[str, PromptTemplate] = {
         role="system",
         content=(
             "你是一个工具选择器。依据用户问题、意图与可用工具描述，返回 JSON："
-            '{"tool": "<tool_name 或 none>", "arguments": {...}, "reason": "简述选择原因"}。'
+            '{"tool": "<tool_name 或 none>", "arguments": {...}, '
+            '"reason": "简述选择原因"}。'
             "只返回 JSON，优先选择最贴切的问题解决工具；若无需工具，tool 填写 none。"
         ),
     ),

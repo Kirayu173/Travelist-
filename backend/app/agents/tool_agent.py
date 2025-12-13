@@ -32,9 +32,7 @@ class ToolAgentRunner:
             from langchain_ollama import ChatOllama
             from langgraph.checkpoint.memory import InMemorySaver
         except Exception as exc:  # pragma: no cover - optional dependency
-            self._logger.warning(
-                "tool_agent.init_failed", extra={"error": str(exc)}
-            )
+            self._logger.warning("tool_agent.init_failed", extra={"error": str(exc)})
             return
 
         model = ChatOllama(
@@ -54,7 +52,8 @@ class ToolAgentRunner:
 
     def _build_prompt(self) -> str:
         lines = [
-            "你是 Travelist+ 的工具调度代理，必须严格按工具定义使用参数，必要时礼貌澄清缺失信息。",
+            "你是 Travelist+ 的工具调度代理，必须严格按工具定义使用参数，"
+            "必要时礼貌澄清缺失信息。",
             "可用工具列表：",
         ]
         for tool in self._tools:
@@ -64,7 +63,8 @@ class ToolAgentRunner:
             args_desc = []
             if schema:
                 for field_name, field in schema.model_fields.items():
-                    args_desc.append(f"- {field_name}: {field.description or field_name}")
+                    field_desc = field.description or field_name
+                    args_desc.append(f"- {field_name}: {field_desc}")
             args_text = "\n".join(args_desc) if args_desc else "无特定参数要求"
             lines.append(f"* {name}: {desc}\n{args_text}")
         return "\n".join(lines)

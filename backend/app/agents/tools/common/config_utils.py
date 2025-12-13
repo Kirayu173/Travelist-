@@ -39,7 +39,10 @@ def load_env() -> bool:
                 logger.info("loaded_env_file", extra={"path": str(env_path)})
                 loaded = True
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("load_env_failed", extra={"path": str(env_path), "error": str(exc)})
+                logger.warning(
+                    "load_env_failed",
+                    extra={"path": str(env_path), "error": str(exc)},
+                )
     if not loaded:
         logger.warning("load_env_not_found")
     return loaded
@@ -55,4 +58,6 @@ def require_key(key_name: str) -> None:
     """Ensure key exists, otherwise raise for clearer diagnostics."""
 
     if not os.getenv(key_name):
-        raise ValueError(f"API key '{key_name}' is not set; please configure environment.")
+        raise ValueError(
+            f"API key '{key_name}' is not set; please configure environment."
+        )

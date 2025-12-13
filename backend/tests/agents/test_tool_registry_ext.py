@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from pydantic import BaseModel
-
 from app.agents.tools.registry import RegisteredTool, ToolExecutionError, ToolRegistry
+from pydantic import BaseModel
 
 
 class _Args(BaseModel):

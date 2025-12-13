@@ -20,7 +20,10 @@ def _service():
 async def poi_around(
     lat: float = Query(..., description="纬度，-90~90"),
     lng: float = Query(..., description="经度，-180~180"),
-    type: str | None = Query(default=None, description="POI 类型（food/sight/hotel/...）"),
+    type: str | None = Query(
+        default=None,
+        description="POI 类型（food/sight/hotel/...）",
+    ),
     radius: int | None = Query(default=None, description="半径（米）"),
     limit: int | None = Query(default=20, ge=1, le=50, description="返回数量上限"),
 ):
@@ -34,4 +37,3 @@ async def poi_around(
             status_code=400, content=error_response(exc.message, code=14040)
         )
     return success_response({"items": results, "meta": meta})
-

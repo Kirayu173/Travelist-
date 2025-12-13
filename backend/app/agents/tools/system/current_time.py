@@ -99,7 +99,10 @@ class CurrentTimeTool(StructuredTool):
             "current_time": formatted,
             "iso_format": current.isoformat(),
             "timezone": timezone_str or (current.tzname() or "local"),
-            "timestamp": {"unix": int(timestamp), "milliseconds": int(timestamp * 1000)},
+            "timestamp": {
+                "unix": int(timestamp),
+                "milliseconds": int(timestamp * 1000),
+            },
             "utc_offset_hours": offset,
             "summary": f"{formatted} ({timezone_str or 'local'})",
         }

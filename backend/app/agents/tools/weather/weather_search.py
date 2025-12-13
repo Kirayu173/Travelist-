@@ -44,13 +44,17 @@ class WeatherSearchTool(StructuredTool):
             "给出总体天气概况与出行建议。"
         )
 
-    def _process_results(self, results: Dict[str, Any]) -> tuple[str, List[Dict[str, Any]]]:
+    def _process_results(
+        self, results: Dict[str, Any]
+    ) -> tuple[str, List[Dict[str, Any]]]:
         if results.get("answer"):
             summary = results["answer"]
         else:
             summary = "未获取直接答案，以下为搜索摘要：\n"
             for i, item in enumerate(results.get("results", [])[:3], 1):
-                summary += f"{i}. {item.get('title', '')}: {item.get('content', '')[:150]}...\n"
+                title = item.get("title", "")
+                content = (item.get("content") or "")[:150]
+                summary += f"{i}. {title}: {content}...\n"
         web_results = []
         for item in results.get("results", [])[:5]:
             web_results.append(
@@ -78,7 +82,10 @@ class WeatherSearchTool(StructuredTool):
 
         try:
             query = self._build_query(payload.destination, payload.month)
-            tavily = TavilySearch(max_results=payload.max_results or 5, include_answer=True)
+            tavily = TavilySearch(
+                max_results=payload.max_results or 5,
+                include_answer=True,
+            )
             results = tavily.invoke({"query": query})
             summary, web_results = self._process_results(results)
             response = {

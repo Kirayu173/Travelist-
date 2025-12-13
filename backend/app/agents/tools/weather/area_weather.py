@@ -61,10 +61,10 @@ class AreaWeatherTool(StructuredTool):
         global _initialized, _api_key, _adcode_cache
         if _initialized:
             return
-        
+
         # 使用统一的配置加载工具
         load_env()
-        
+
         _api_key = get_key("AMAP_API_KEY")
         if not _api_key:
             log_tool_event(
@@ -75,8 +75,13 @@ class AreaWeatherTool(StructuredTool):
                 message="AMAP_API_KEY not configured",
             )
         else:
-            log_tool_event("area_weather", event="init", status="info", message="AMAP_API_KEY loaded successfully")
-            
+            log_tool_event(
+                "area_weather",
+                event="init",
+                status="info",
+                message="AMAP_API_KEY loaded successfully",
+            )
+
         _adcode_cache = AreaWeatherTool._load_adcode_cache()
         _initialized = True
 
@@ -144,9 +149,14 @@ class AreaWeatherTool(StructuredTool):
                     "status": "estimated",
                 }
                 if payload.weather_type == "forecast":
+                    temp_series = [fallback["temperature_c"]] * payload.days
                     fallback["forecast"] = [
-                        {"day_offset": idx + 1, "high_c": temp + 2, "low_c": temp - 3}
-                        for idx, temp in enumerate([fallback["temperature_c"]] * payload.days)
+                        {
+                            "day_offset": idx + 1,
+                            "high_c": temp + 2,
+                            "low_c": temp - 3,
+                        }
+                        for idx, temp in enumerate(temp_series)
                     ]
                 results.append(fallback)
 

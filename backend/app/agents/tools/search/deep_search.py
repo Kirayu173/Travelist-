@@ -30,7 +30,9 @@ class DeepSearchTool(StructuredTool):
             func=self._run,
             coroutine=self._arun,
             name="deep_search",
-            description="生成酒店、交通、活动的候选信息（Tavily 实时搜索），用于行程规划。",
+            description=(
+                "生成酒店、交通、活动的候选信息（Tavily 实时搜索），" "用于行程规划。"
+            ),
             args_schema=DeepSearchInput,
             return_direct=False,
             handle_tool_error=True,
@@ -52,38 +54,56 @@ class DeepSearchTool(StructuredTool):
             return {"error": f"参数错误: {exc}"}
 
         try:
-            tavily = TavilySearch(max_results=5, include_answer=True, search_depth="advanced")
+            tavily = TavilySearch(
+                max_results=5,
+                include_answer=True,
+                search_depth="advanced",
+            )
             categories = []
             if payload.search_type in ("all", "hotel"):
+                hotel_query = (
+                    f"best hotels in {payload.destination_city} "
+                    f"from {payload.start_date} to {payload.end_date} "
+                    f"for {payload.num_travelers} travelers"
+                )
                 categories.append(
                     {
                         "type": "hotel",
                         "label": "酒店信息",
                         "items": self._search_category(
                             tavily,
-                            f"best hotels in {payload.destination_city} from {payload.start_date} to {payload.end_date} for {payload.num_travelers} travelers",
+                            hotel_query,
                         ),
                     }
                 )
             if payload.search_type in ("all", "transport"):
+                transport_query = (
+                    f"transport options from {payload.origin_city} to "
+                    f"{payload.destination_city} between {payload.start_date} and "
+                    f"{payload.end_date}"
+                )
                 categories.append(
                     {
                         "type": "transport",
                         "label": "交通信息",
                         "items": self._search_category(
                             tavily,
-                            f"transport options from {payload.origin_city} to {payload.destination_city} between {payload.start_date} and {payload.end_date}",
+                            transport_query,
                         ),
                     }
                 )
             if payload.search_type in ("all", "activity"):
+                activity_query = (
+                    f"things to do in {payload.destination_city} for travelers during "
+                    f"{payload.start_date} to {payload.end_date}"
+                )
                 categories.append(
                     {
                         "type": "activity",
                         "label": "活动信息",
                         "items": self._search_category(
                             tavily,
-                            f"things to do in {payload.destination_city} for travelers during {payload.start_date} to {payload.end_date}",
+                            activity_query,
                         ),
                     }
                 )

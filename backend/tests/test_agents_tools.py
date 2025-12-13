@@ -98,12 +98,22 @@ def test_current_time_tool_outputs_fields():
 @pytest.mark.asyncio
 async def test_tool_selector_prefers_model_json():
     registry = build_tool_registry()
+    model_reply = (
+        '{"tool": "current_time", "arguments": {"timezone": "UTC"}, '
+        '"reason": "time question"}'
+    )
     selector = ToolSelector(
-        ai_client=_StubAiClient(['{"tool": "current_time", "arguments": {"timezone": "UTC"}, "reason": "time question"}']),
+        ai_client=_StubAiClient([model_reply]),
         prompt_registry=PromptRegistry(),
         tool_registry=registry,
     )
-    state = AssistantState(user_id=1, trip_id=None, session_id=None, query="现在几点", top_k=3)
+    state = AssistantState(
+        user_id=1,
+        trip_id=None,
+        session_id=None,
+        query="现在几点",
+        top_k=3,
+    )
     name, args, reason = await selector.select_tool(state)
     assert name == "current_time"
     assert args.get("timezone") == "UTC"
@@ -139,4 +149,7 @@ async def test_assistant_graph_runs_with_tool_execution():
         result_state = AssistantState(**result_state)
     assert result_state.selected_tool == "current_time"
     assert result_state.tool_result is not None
-    assert any(t["node"] == "tool_execute" and t["status"] == "ok" for t in result_state.tool_traces)
+    assert any(
+        t["node"] == "tool_execute" and t["status"] == "ok"
+        for t in result_state.tool_traces
+    )

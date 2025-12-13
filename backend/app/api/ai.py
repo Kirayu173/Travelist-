@@ -6,8 +6,10 @@ from contextlib import suppress
 
 from app.ai import AiClientError, AiStreamChunk
 from app.models.ai_schemas import ChatDemoPayload, ChatPayload
+from app.models.plan_schemas import PlanRequest
 from app.services.ai_chat_service import AiChatDemoService, get_ai_chat_service
 from app.services.assistant_service import AssistantService, get_assistant_service
+from app.services.plan_service import PlanServiceError, get_plan_service
 from app.utils.responses import error_response, success_response
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -21,6 +23,34 @@ def _demo_service() -> AiChatDemoService:
 
 def _assistant_service() -> AssistantService:
     return get_assistant_service()
+
+
+@router.post(
+    "/plan",
+    summary="行程规划（fast/deep 统一入口）",
+    description=(
+        "Stage-7 仅实现 mode=fast（规则规划）；" "mode=deep 预留但返回未实现错误。"
+    ),
+)
+async def plan(payload: PlanRequest):
+    service = get_plan_service()
+    try:
+        result, _trip_id = await service.plan(payload)
+    except PlanServiceError as exc:
+        return JSONResponse(
+            status_code=400,
+            content=error_response(
+                exc.message,
+                code=exc.code,
+                data={"trace_id": exc.trace_id, **(exc.data or {})},
+            ),
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        return JSONResponse(
+            status_code=502,
+            content=error_response("规划失败", code=14079, data={"error": str(exc)}),
+        )
+    return success_response(result.model_dump(mode="json", by_alias=True))
 
 
 async def _enqueue_sse_chunk(queue: asyncio.Queue[str], chunk: AiStreamChunk) -> None:

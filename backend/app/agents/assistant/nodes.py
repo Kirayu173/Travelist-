@@ -4,11 +4,11 @@ import contextlib
 import json
 from typing import Any
 
-from app.ai import AiChatRequest, AiClient, AiMessage
 from app.agents.assistant.state import AssistantState
 from app.agents.assistant.tool_selection import ToolSelector
 from app.agents.tool_agent import AgentContext, ToolAgentRunner
 from app.agents.tools.registry import ToolRegistry
+from app.ai import AiChatRequest, AiClient, AiMessage
 from app.ai.memory_models import MemoryLevel
 from app.ai.prompts import PromptRegistry
 from app.core.logging import get_logger
@@ -210,24 +210,28 @@ class AssistantNodes:
             tool_names = [call["tool"] for call in tool_calls if call.get("tool")]
             state.tool_result = result
             state.answer_text = final_text or state.answer_text
-            state.selected_tool = (tool_names[0] if tool_names else None) or "create_agent"
+            state.selected_tool = tool_names[0] if tool_names else "create_agent"
             state.tool_traces.append(
                 {
                     "node": "tool_agent",
                     "status": "ok",
                     "tool": state.selected_tool,
                     "invoked_tools": tool_names[:5] if tool_names else [],
-                    "args_preview": [
-                        {
-                            "tool": call.get("tool"),
-                            "args_keys": sorted(call.get("args").keys())
-                            if isinstance(call.get("args"), dict)
-                            else None,
-                        }
-                        for call in tool_calls[:5]
-                    ]
-                    if tool_calls
-                    else [],
+                    "args_preview": (
+                        [
+                            {
+                                "tool": call.get("tool"),
+                                "args_keys": (
+                                    sorted(call.get("args").keys())
+                                    if isinstance(call.get("args"), dict)
+                                    else None
+                                ),
+                            }
+                            for call in tool_calls[:5]
+                        ]
+                        if tool_calls
+                        else []
+                    ),
                 }
             )
             if tool_names:
@@ -388,7 +392,8 @@ class AssistantNodes:
                 parsed_intent = obj.get("intent")
         lowered = query.lower()
         heuristic = "general_qa"
-        if any(keyword in lowered for keyword in ["附近", "周边", "周围", "景点", "好吃", "餐厅", "美食", "hotel"]):
+        poi_keywords = ["附近", "周边", "周围", "景点", "好吃", "餐厅", "美食", "hotel"]
+        if any(keyword in lowered for keyword in poi_keywords):
             heuristic = "poi_nearby"
         elif any(keyword in lowered for keyword in ["行程", "trip", "计划", "安排"]):
             heuristic = "trip_query"
@@ -489,7 +494,7 @@ class AssistantNodes:
                 if isinstance(last, dict):
                     return last.get("content")
                 if hasattr(last, "content"):
-                    return getattr(last, "content")
+                    return last.content
         if isinstance(agent_result, str):
             return agent_result
         return None

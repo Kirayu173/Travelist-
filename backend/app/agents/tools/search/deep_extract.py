@@ -35,7 +35,9 @@ class DeepExtractTool(StructuredTool):
             func=self._run,
             coroutine=self._arun,
             name="deep_extract",
-            description="从多个 URL 提取关键信息的结构化结果（本地模拟），用于快速摘要。",
+            description=(
+                "从多个 URL 提取关键信息的结构化结果（本地模拟），" "用于快速摘要。"
+            ),
             args_schema=DeepExtractInput,
             return_direct=False,
             handle_tool_error=True,

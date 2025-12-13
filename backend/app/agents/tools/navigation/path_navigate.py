@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
-
 import os
 from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional
+
+import requests
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from dotenv import load_dotenv
-import requests
 from langchain_core.tools.structured import StructuredTool
 from pydantic import BaseModel, Field, field_validator
 
@@ -29,7 +29,10 @@ class PathNavigateInput(BaseModel):
         le=9,
         description="驾车策略，仅 driving 生效",
     )
-    city: Optional[str] = Field(default=None, description="可选城市名称，用于 transit 描述")
+    city: Optional[str] = Field(
+        default=None,
+        description="可选城市名称，用于 transit 描述",
+    )
 
     @field_validator("routes")
     @classmethod
@@ -108,7 +111,10 @@ class PathNavigateTool(StructuredTool):
             )
 
         response = {
-            "summary": {"total_routes": len(routes), "travel_mode": payload.travel_mode},
+            "summary": {
+                "total_routes": len(routes),
+                "travel_mode": payload.travel_mode,
+            },
             "routes": routes,
         }
         log_tool_event(
@@ -122,7 +128,9 @@ class PathNavigateTool(StructuredTool):
         )
         return response
 
-    def _fallback_estimate(self, payload: PathNavigateInput, kwargs: dict) -> Dict[str, Any]:
+    def _fallback_estimate(
+        self, payload: PathNavigateInput, kwargs: dict
+    ) -> Dict[str, Any]:
         results: list[dict[str, Any]] = []
         for route in payload.routes:
             origin = route.get("origin") or "未知起点"
@@ -136,13 +144,18 @@ class PathNavigateTool(StructuredTool):
                     "distance_km": round(distance_km, 1),
                     "duration_min": round(duration_min),
                     "travel_mode": payload.travel_mode,
-                    "strategy": payload.strategy if payload.travel_mode == "driving" else None,
+                    "strategy": (
+                        payload.strategy if payload.travel_mode == "driving" else None
+                    ),
                     "city": payload.city,
                     "status": "estimated",
                 }
             )
         response = {
-            "summary": {"total_routes": len(results), "travel_mode": payload.travel_mode},
+            "summary": {
+                "total_routes": len(results),
+                "travel_mode": payload.travel_mode,
+            },
             "routes": results,
         }
         log_tool_event(

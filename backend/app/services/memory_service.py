@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from time import monotonic
 from threading import RLock
+from time import monotonic
 from typing import Any
 from uuid import uuid4
 
@@ -133,12 +133,12 @@ class _InMemoryStore:
             return
         # Drop oldest across namespaces by simple round-robin
         while total_entries > self._max_total_entries:
-            for namespace, bucket in list(self._store.items()):
+            for _namespace, bucket in list(self._store.items()):
                 if bucket:
                     bucket.popleft()
                     total_entries -= 1
-                if total_entries <= self._max_total_entries:
-                    break
+                    if total_entries <= self._max_total_entries:
+                        break
 
     @staticmethod
     def _score(text: str, query: str) -> float:
@@ -285,7 +285,8 @@ class MemoryService:
     ) -> list[MemoryItem]:
         """
         List memories for diagnostics/inspection, leveraging the same search path.
-        Offset is applied locally after retrieval to stay compatible with mem0/local store.
+        Offset is applied locally after retrieval to stay compatible with
+        mem0/local store.
         """
 
         fetch_limit = max(limit + offset, 1)

@@ -18,6 +18,7 @@ from app.ai.client import reset_ai_client
 from app.core.app import create_app
 from app.core.db import dispose_engine
 from app.core.settings import settings
+from app.services.plan_metrics import reset_plan_metrics
 from app.utils.metrics import reset_metrics_registry
 from fastapi.testclient import TestClient
 from sqlalchemy.engine.url import make_url
@@ -43,6 +44,7 @@ def configure_admin_and_ai() -> None:
     settings.poi_provider = "mock"
     settings.poi_cache_enabled = False
     reset_ai_client()
+    reset_plan_metrics()
 
 
 @pytest.fixture(scope="session", autouse=True)

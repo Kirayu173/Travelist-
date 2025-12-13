@@ -23,7 +23,8 @@ def _build_tool_logger(name: str) -> logging.Logger:
         formatter = logging.Formatter(
             "%(asctime)s | %(levelname)s | tool=%(tool)s | event=%(event)s | "
             "status=%(status)s | err=%(error_code)s | msg=%(message)s | "
-            "request=%(request)s | response=%(response)s | raw=%(raw_input)s | output=%(output)s",
+            "request=%(request)s | response=%(response)s | raw=%(raw_input)s | "
+            "output=%(output)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         handler = RotatingFileHandler(

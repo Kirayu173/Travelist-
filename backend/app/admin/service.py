@@ -24,6 +24,7 @@ from app.core.redis import check_redis_health
 from app.core.settings import settings
 from app.models.ai_schemas import PromptUpdatePayload
 from app.models.orm import ChatSession, Message
+from app.services.plan_metrics import get_plan_metrics
 from app.services.poi_service import get_poi_service
 from app.utils.http_client import perform_internal_request
 from app.utils.metrics import MetricsRegistry, get_metrics_registry
@@ -223,6 +224,9 @@ class AdminService:
 
     def get_ai_summary(self) -> dict[str, Any]:
         return self._ai_metrics.snapshot()
+
+    def get_plan_summary(self) -> dict[str, Any]:
+        return get_plan_metrics().snapshot()
 
     def get_chat_summary(self) -> dict[str, Any]:
         today = datetime.now(timezone.utc).date()
@@ -633,6 +637,13 @@ class AdminService:
         ref = schema.get("$ref")
         if ref:
             return ref.split("/")[-1]
+        if "items" in schema:
+            nested = self._extract_schema_name(schema.get("items"))
+            return f"{nested}[]" if nested else "array"
+        schema_type = schema.get("type")
+        if schema_type:
+            return schema_type
+        return None
 
     def _collect_poi_counts(self) -> dict[str, int]:
         engine = get_engine()
@@ -643,7 +654,8 @@ class AdminService:
                         text(
                             "SELECT "
                             "(SELECT COUNT(*) FROM pois) AS total, "
-                            "(SELECT COUNT(*) FROM pois WHERE created_at >= NOW() - INTERVAL '7 days') AS recent_7d"
+                            "(SELECT COUNT(*) FROM pois WHERE created_at >= NOW() - "
+                            "INTERVAL '7 days') AS recent_7d"
                         )
                     )
                     .mappings()
@@ -659,13 +671,6 @@ class AdminService:
                 extra={"error": self._format_db_error(exc)},
             )
             return {"total": 0, "recent_7d": 0}
-        if "items" in schema:
-            nested = self._extract_schema_name(schema.get("items"))
-            return f"{nested}[]" if nested else "array"
-        schema_type = schema.get("type")
-        if schema_type:
-            return schema_type
-        return None
 
     def _prepare_api_path(
         self,

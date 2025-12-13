@@ -15,7 +15,9 @@ async def test_poi_service_queries_db(monkeypatch):
         session.execute(
             text(
                 """
-                INSERT INTO pois(provider, provider_id, name, category, addr, rating, geom)
+                INSERT INTO pois(
+                    provider, provider_id, name, category, addr, rating, geom
+                )
                 VALUES (:provider, :pid, :name, :cat, :addr, :rating,
                         ST_GeogFromText('SRID=4326;POINT(113.26436 23.12908)'))
                 ON CONFLICT DO NOTHING
@@ -48,9 +50,22 @@ async def test_poi_service_queries_db(monkeypatch):
 async def test_poi_service_cache_hit(monkeypatch):
     service = PoiService(cache_ttl_seconds=10)
     monkeypatch.setattr(service, "_redis", None)
-    data = [{"name": "缓存POI", "provider": "mock", "provider_id": "cache", "lat": 0, "lng": 0}]
+    data = [
+        {
+            "name": "缓存POI",
+            "provider": "mock",
+            "provider_id": "cache",
+            "lat": 0,
+            "lng": 0,
+        }
+    ]
     key = service._build_cache_key(0, 0, None, 1000, 50)
     await service._cache_set(key, data)
-    results, meta = await service.get_poi_around(lat=0, lng=0, poi_type=None, radius=1000)
+    results, meta = await service.get_poi_around(
+        lat=0,
+        lng=0,
+        poi_type=None,
+        radius=1000,
+    )
     assert meta["source"] == "cache"
     assert results[0]["name"] == "缓存POI"

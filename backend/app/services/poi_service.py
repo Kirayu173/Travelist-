@@ -8,10 +8,10 @@ from typing import Any, Iterable
 
 import sqlalchemy as sa
 from anyio import to_thread
+from app.core.db import session_scope
 from app.core.logging import get_logger
 from app.core.redis import get_redis_client
 from app.core.settings import settings
-from app.core.db import session_scope
 from app.models.orm import Poi
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import text
@@ -142,9 +142,11 @@ class GaodePoiProvider(BasePoiProvider):
                         "name": item.get("name") or "",
                         "category": item.get("type") or "",
                         "addr": item.get("address") or "",
-                        "rating": float(item.get("biz_ext", {}).get("rating") or 0)
-                        if isinstance(item.get("biz_ext"), dict)
-                        else None,
+                        "rating": (
+                            float(item.get("biz_ext", {}).get("rating") or 0)
+                            if isinstance(item.get("biz_ext"), dict)
+                            else None
+                        ),
                         "lat": float(lat_str),
                         "lng": float(lng_str),
                         "ext": {"tel": item.get("tel"), "pname": item.get("pname")},
@@ -280,9 +282,8 @@ class PoiService:
         limit: int,
     ) -> list[dict[str, Any]]:
         with session_scope() as session:
-            stmt = (
-                text(
-                    """
+            stmt = text(
+                """
                     SELECT id, provider, provider_id, name, category, addr, rating,
                            ST_Y(geom::geometry) AS lat,
                            ST_X(geom::geometry) AS lng,
@@ -304,14 +305,12 @@ class PoiService:
                     ORDER BY distance_m ASC
                     LIMIT :limit
                     """
-                )
-                .bindparams(
-                    sa.bindparam("lat", type_=sa.Float),
-                    sa.bindparam("lng", type_=sa.Float),
-                    sa.bindparam("radius", type_=sa.Integer),
-                    sa.bindparam("poi_type", type_=sa.String),
-                    sa.bindparam("limit", type_=sa.Integer),
-                )
+            ).bindparams(
+                sa.bindparam("lat", type_=sa.Float),
+                sa.bindparam("lng", type_=sa.Float),
+                sa.bindparam("radius", type_=sa.Integer),
+                sa.bindparam("poi_type", type_=sa.String),
+                sa.bindparam("limit", type_=sa.Integer),
             )
             rows = session.execute(
                 stmt,
@@ -333,13 +332,19 @@ class PoiService:
                         "name": row["name"],
                         "category": row["category"],
                         "addr": row["addr"],
-                        "rating": float(row["rating"]) if row["rating"] is not None else None,
+                        "rating": (
+                            float(row["rating"]) if row["rating"] is not None else None
+                        ),
                         "lat": float(row["lat"]) if row["lat"] is not None else None,
                         "lng": float(row["lng"]) if row["lng"] is not None else None,
                         "ext": row["ext"] or {},
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
-                        "distance_m": float(row["distance_m"]) if row["distance_m"] is not None else None,
+                        "distance_m": (
+                            float(row["distance_m"])
+                            if row["distance_m"] is not None
+                            else None
+                        ),
                         "source": "db",
                     }
                 )
@@ -469,7 +474,10 @@ class PoiService:
             session.commit()
 
     @staticmethod
-    def _chunk(items: list[dict[str, Any]], size: int) -> Iterable[list[dict[str, Any]]]:
+    def _chunk(
+        items: list[dict[str, Any]],
+        size: int,
+    ) -> Iterable[list[dict[str, Any]]]:
         for idx in range(0, len(items), size):
             yield items[idx : idx + size]
 

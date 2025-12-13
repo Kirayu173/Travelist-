@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.ai import AiChatRequest, AiClient, AiMessage, AiClientError
-from app.ai.prompts import PromptRegistry
 from app.agents.assistant.state import AssistantState
 from app.agents.tools.registry import RegisteredTool, ToolRegistry
+from app.ai import AiChatRequest, AiClient, AiClientError, AiMessage
+from app.ai.prompts import PromptRegistry
 from app.core.logging import get_logger
 from app.core.settings import settings
 

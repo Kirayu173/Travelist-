@@ -54,6 +54,41 @@ def test_admin_api_test_executes_sample_call(client):
     assert data["ok"] is True
 
 
+def test_admin_sql_test_requires_auth(client):
+    resp = client.post("/admin/api/sql_test", json={"query": "select 1"})
+    assert resp.status_code == 401
+
+
+def test_admin_sql_test_allows_select_only(client):
+    resp = client.post(
+        "/admin/api/sql_test",
+        json={"query": "select 1 as a"},
+        headers=_admin_headers(),
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["columns"] == ["a"]
+    assert data["rows"][0]["a"] == 1
+
+
+def test_admin_sql_test_rejects_multiple_statements(client):
+    resp = client.post(
+        "/admin/api/sql_test",
+        json={"query": "select 1; select 2"},
+        headers=_admin_headers(),
+    )
+    assert resp.status_code == 400
+
+
+def test_admin_sql_test_rejects_non_select(client):
+    resp = client.post(
+        "/admin/api/sql_test",
+        json={"query": "update users set name='x'"},
+        headers=_admin_headers(),
+    )
+    assert resp.status_code == 400
+
+
 def test_admin_checks_endpoint_returns_three_items(client):
     resp = client.get("/admin/checks")
     assert resp.status_code == 200

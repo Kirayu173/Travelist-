@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import inspect
+import pickle
+import warnings
 from dataclasses import dataclass
 from threading import RLock
 from time import monotonic
 from typing import Any, Awaitable, Callable, Dict
-
-import pickle
-import warnings
 
 from app.core.settings import settings
 
@@ -167,7 +166,8 @@ def _init_cache_backend() -> CacheBackend:
             )
         except Exception as exc:  # pragma: no cover - optional path
             warnings.warn(
-                f"Redis cache init failed ({exc}), falling back to in-memory cache"
+                f"Redis cache init failed ({exc}), falling back to in-memory cache",
+                stacklevel=2,
             )
     return CacheBackend()
 

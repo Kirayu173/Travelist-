@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from app.admin import AdminService, get_admin_service, templates
 from app.admin.auth import AdminAuthError, verify_admin_access
 from app.admin.schemas import ApiTestRequest
+from app.ai.memory_models import MemoryLevel
 from app.core.db import get_db
 from app.core.settings import settings
 from app.models.ai_schemas import PromptUpdatePayload
-from app.ai.memory_models import MemoryLevel
 from app.services.memory_service import get_memory_service
 from app.utils.responses import error_response, success_response
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -119,7 +119,10 @@ async def admin_db_schema(
 
 @router.post("/api/sql_test", summary="SQL 调试 (Restricted)")
 def run_sql_test(
-    payload: dict[str, str], request: Request, db: Session = Depends(get_db)
+    payload: dict[str, str],
+    request: Request,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_access),
 ):
     """
     Execute a raw SQL query for debugging (RESTRICTED).
@@ -131,6 +134,8 @@ def run_sql_test(
 
     if not query.lower().startswith("select"):
         raise HTTPException(400, "Only SELECT queries are allowed in this console.")
+    if ";" in query:
+        raise HTTPException(400, "Multiple statements are not allowed.")
 
     try:
         # Execute synchronously
@@ -247,6 +252,34 @@ def admin_ai_summary_data(
 ) -> dict:
     summary = admin_service.get_ai_summary()
     return success_response(summary)
+
+
+@router.get("/plan/summary")
+def admin_plan_summary_data(
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> dict:
+    summary = admin_service.get_plan_summary()
+    return success_response(summary)
+
+
+@router.get("/plan/overview", response_class=HTMLResponse)
+async def admin_plan_overview(
+    request: Request,
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> HTMLResponse:
+    summary = admin_service.get_plan_summary()
+    context = {
+        "request": request,
+        "settings": settings,
+        "summary": summary,
+    }
+    response = templates.TemplateResponse(request, "plan_overview.html", context)
+    token = request.query_params.get("token")
+    if token:
+        response.set_cookie("admin_token", token, httponly=True, samesite="lax")
+    return response
 
 
 @router.get("/chat/summary")

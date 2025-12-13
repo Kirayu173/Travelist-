@@ -29,6 +29,26 @@ class Settings(BaseSettings):
     poi_coord_precision: int = 4
     poi_cache_enabled: bool = True
     poi_min_results: int = 8
+
+    plan_default_day_start: str = Field(
+        default="09:00", validation_alias="PLAN_DEFAULT_DAY_START"
+    )
+    plan_default_day_end: str = Field(
+        default="18:00", validation_alias="PLAN_DEFAULT_DAY_END"
+    )
+    plan_default_slot_minutes: int = Field(
+        default=90, validation_alias="PLAN_DEFAULT_SLOT_MINUTES"
+    )
+    plan_max_days: int = Field(default=14, validation_alias="PLAN_MAX_DAYS")
+    plan_fast_random_seed: int = Field(
+        default=7, validation_alias="PLAN_FAST_RANDOM_SEED"
+    )
+    plan_fast_poi_limit_per_day: int = Field(
+        default=16, validation_alias="PLAN_FAST_POI_LIMIT_PER_DAY"
+    )
+    plan_fast_transport_mode: Literal["walk", "bike", "drive", "transit"] = Field(
+        default="walk", validation_alias="PLAN_FAST_TRANSPORT_MODE"
+    )
     llm_provider: str | None = None
     llm_api_key: str | None = None
     ai_provider: str | None = None
