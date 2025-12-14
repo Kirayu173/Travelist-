@@ -1,0 +1,325 @@
+{
+  "code": 0,
+  "msg": "ok",
+  "data": {
+    "mode": "fast",
+    "async": false,
+    "request_id": null,
+    "seed_mode": null,
+    "task_id": null,
+    "plan": {
+      "title": "杭州 行程规划",
+      "destination": "杭州",
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-02",
+      "status": "draft",
+      "meta": {
+        "planner": {
+          "mode": "fast",
+          "rules_version": "fast_rules_v1",
+          "seed": 7,
+          "interests": [
+            "food",
+            "sight",
+            "museum"
+          ]
+        }
+      },
+      "id": null,
+      "user_id": 1,
+      "day_cards": [
+        {
+          "day_index": 0,
+          "date": "2025-01-01",
+          "note": null,
+          "id": null,
+          "trip_id": null,
+          "sub_trips": [
+            {
+              "order_index": 0,
+              "activity": "美食探索",
+              "poi_id": null,
+              "loc_name": "Mock Food 1",
+              "transport": "walk",
+              "start_time": "09:00:00",
+              "end_time": "10:30:00",
+              "lat": 27.791,
+              "lng": 101.01100000000001,
+              "ext": {
+                "slot": "morning",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "food-0",
+                  "source": "api",
+                  "category": "food",
+                  "addr": "附近道路 1 号",
+                  "rating": 4.0,
+                  "distance_m": 148.46
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 1,
+              "activity": "博物馆参观",
+              "poi_id": null,
+              "loc_name": "Mock Museum 1",
+              "transport": "walk",
+              "start_time": "10:30:00",
+              "end_time": "12:00:00",
+              "lat": 27.791,
+              "lng": 101.01100000000001,
+              "ext": {
+                "slot": "morning",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "museum-0",
+                  "source": "api",
+                  "category": "museum",
+                  "addr": "附近道路 1 号",
+                  "rating": 4.0,
+                  "distance_m": 148.46
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 2,
+              "activity": "景点游览",
+              "poi_id": null,
+              "loc_name": "Mock Sight 1",
+              "transport": "walk",
+              "start_time": "13:30:00",
+              "end_time": "15:00:00",
+              "lat": 27.791,
+              "lng": 101.01100000000001,
+              "ext": {
+                "slot": "afternoon",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "sight-0",
+                  "source": "api",
+                  "category": "sight",
+                  "addr": "附近道路 1 号",
+                  "rating": 4.0,
+                  "distance_m": 148.46
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 3,
+              "activity": "美食探索",
+              "poi_id": null,
+              "loc_name": "Mock Food 2",
+              "transport": "walk",
+              "start_time": "15:00:00",
+              "end_time": "16:30:00",
+              "lat": 27.791999999999998,
+              "lng": 101.012,
+              "ext": {
+                "slot": "afternoon",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "food-1",
+                  "source": "api",
+                  "category": "food",
+                  "addr": "附近道路 2 号",
+                  "rating": 3.95,
+                  "distance_m": 296.92
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            }
+          ]
+        },
+        {
+          "day_index": 1,
+          "date": "2025-01-02",
+          "note": null,
+          "id": null,
+          "trip_id": null,
+          "sub_trips": [
+            {
+              "order_index": 0,
+              "activity": "博物馆参观",
+              "poi_id": null,
+              "loc_name": "Mock Museum 2",
+              "transport": "walk",
+              "start_time": "09:00:00",
+              "end_time": "10:30:00",
+              "lat": 27.791999999999998,
+              "lng": 101.012,
+              "ext": {
+                "slot": "morning",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "museum-1",
+                  "source": "api",
+                  "category": "museum",
+                  "addr": "附近道路 2 号",
+                  "rating": 3.95,
+                  "distance_m": 296.92
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 1,
+              "activity": "景点游览",
+              "poi_id": null,
+              "loc_name": "Mock Sight 2",
+              "transport": "walk",
+              "start_time": "10:30:00",
+              "end_time": "12:00:00",
+              "lat": 27.791999999999998,
+              "lng": 101.012,
+              "ext": {
+                "slot": "morning",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "sight-1",
+                  "source": "api",
+                  "category": "sight",
+                  "addr": "附近道路 2 号",
+                  "rating": 3.95,
+                  "distance_m": 296.92
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 2,
+              "activity": "美食探索",
+              "poi_id": null,
+              "loc_name": "Mock Food 3",
+              "transport": "walk",
+              "start_time": "13:30:00",
+              "end_time": "15:00:00",
+              "lat": 27.793,
+              "lng": 101.013,
+              "ext": {
+                "slot": "afternoon",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "food-2",
+                  "source": "api",
+                  "category": "food",
+                  "addr": "附近道路 3 号",
+                  "rating": 3.9,
+                  "distance_m": 445.38
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 3,
+              "activity": "博物馆参观",
+              "poi_id": null,
+              "loc_name": "Mock Museum 3",
+              "transport": "walk",
+              "start_time": "15:00:00",
+              "end_time": "16:30:00",
+              "lat": 27.793,
+              "lng": 101.013,
+              "ext": {
+                "slot": "afternoon",
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "museum-2",
+                  "source": "api",
+                  "category": "museum",
+                  "addr": "附近道路 3 号",
+                  "rating": 3.9,
+                  "distance_m": 445.38
+                },
+                "planner": {
+                  "rules_version": "fast_rules_v1"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            }
+          ]
+        }
+      ],
+      "day_count": 2,
+      "sub_trip_count": 8
+    },
+    "metrics": {
+      "planner": "fast_rules_v1",
+      "seed": 7,
+      "day_count": 2,
+      "candidate_pois": 30,
+      "activities": 8,
+      "poi_sources": {
+        "api": 3
+      },
+      "latency_ms": 19.046,
+      "saved": false
+    },
+    "tool_traces": [
+      {
+        "node": "plan_input",
+        "status": "ok",
+        "detail": {
+          "mode": "fast"
+        }
+      },
+      {
+        "node": "planner_fast",
+        "status": "ok",
+        "latency_ms": 12.869,
+        "detail": {
+          "activities": 8,
+          "candidates": 30
+        }
+      },
+      {
+        "node": "plan_validate",
+        "status": "ok",
+        "latency_ms": 0.03,
+        "detail": {
+          "issues": 0
+        }
+      },
+      {
+        "node": "plan_output",
+        "status": "ok",
+        "detail": {
+          "has_plan": true,
+          "errors": 0
+        }
+      }
+    ],
+    "trace_id": "exp8-fast-v1"
+  }
+}

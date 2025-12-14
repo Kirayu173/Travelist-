@@ -1,0 +1,247 @@
+{
+  "code": 0,
+  "msg": "ok",
+  "data": {
+    "mode": "deep",
+    "async": false,
+    "request_id": "exp_deep_sync_2025-01-01_2",
+    "seed_mode": "fast",
+    "task_id": null,
+    "plan": {
+      "title": "杭州 行程规划",
+      "destination": "杭州",
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-02",
+      "status": "draft",
+      "meta": {
+        "planner": {
+          "mode": "deep",
+          "name": "deep_llm_v1",
+          "seed_mode": "fast",
+          "seed_rules_version": "fast_rules_v1"
+        }
+      },
+      "id": null,
+      "user_id": 1,
+      "day_cards": [
+        {
+          "day_index": 0,
+          "date": "2025-01-01",
+          "note": null,
+          "id": null,
+          "trip_id": null,
+          "sub_trips": [
+            {
+              "order_index": 0,
+              "activity": "美食探索",
+              "poi_id": null,
+              "loc_name": "Mock Food 4",
+              "transport": null,
+              "start_time": "09:00:00",
+              "end_time": "11:00:00",
+              "lat": 27.794,
+              "lng": 101.01400000000001,
+              "ext": {
+                "slot": "morning",
+                "planner": {
+                  "mock": true
+                },
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "food-3",
+                  "category": "food",
+                  "addr": "附近道路 4 号",
+                  "rating": 3.85,
+                  "name": "Mock Food 4"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 1,
+              "activity": "景点游览",
+              "poi_id": null,
+              "loc_name": "Mock Sight 3",
+              "transport": null,
+              "start_time": "14:00:00",
+              "end_time": "16:00:00",
+              "lat": 27.793,
+              "lng": 101.013,
+              "ext": {
+                "slot": "afternoon",
+                "planner": {
+                  "mock": true
+                },
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "sight-2",
+                  "category": "sight",
+                  "addr": "附近道路 3 号",
+                  "rating": 3.9,
+                  "name": "Mock Sight 3"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            }
+          ]
+        },
+        {
+          "day_index": 1,
+          "date": "2025-01-02",
+          "note": null,
+          "id": null,
+          "trip_id": null,
+          "sub_trips": [
+            {
+              "order_index": 0,
+              "activity": "美食探索",
+              "poi_id": null,
+              "loc_name": "Mock Food 5",
+              "transport": null,
+              "start_time": "09:00:00",
+              "end_time": "11:00:00",
+              "lat": 27.794999999999998,
+              "lng": 101.015,
+              "ext": {
+                "slot": "morning",
+                "planner": {
+                  "mock": true
+                },
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "food-4",
+                  "category": "food",
+                  "addr": "附近道路 5 号",
+                  "rating": 3.8,
+                  "name": "Mock Food 5"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            },
+            {
+              "order_index": 1,
+              "activity": "景点游览",
+              "poi_id": null,
+              "loc_name": "Mock Sight 4",
+              "transport": null,
+              "start_time": "14:00:00",
+              "end_time": "16:00:00",
+              "lat": 27.794,
+              "lng": 101.01400000000001,
+              "ext": {
+                "slot": "afternoon",
+                "planner": {
+                  "mock": true
+                },
+                "poi": {
+                  "provider": "mock",
+                  "provider_id": "sight-3",
+                  "category": "sight",
+                  "addr": "附近道路 4 号",
+                  "rating": 3.85,
+                  "name": "Mock Sight 4"
+                }
+              },
+              "id": null,
+              "day_card_id": null
+            }
+          ]
+        }
+      ],
+      "day_count": 2,
+      "sub_trip_count": 4
+    },
+    "metrics": {
+      "planner": "deep_llm_v1",
+      "prompt_version": "v1",
+      "seed_mode": "fast",
+      "fallback_to_fast": false,
+      "llm_calls": 2,
+      "llm_retries": 0,
+      "llm_latency_ms": 0.224,
+      "llm_tokens_total": 178,
+      "saved": false,
+      "seed": 7,
+      "candidate_pois": 24,
+      "latency_ms": 5.274
+    },
+    "tool_traces": [
+      {
+        "node": "plan_input",
+        "status": "ok",
+        "detail": {
+          "mode": "deep"
+        }
+      },
+      {
+        "node": "planner_seed_fast",
+        "status": "ok",
+        "latency_ms": 0.349,
+        "detail": {
+          "planner": "fast_rules_v1"
+        }
+      },
+      {
+        "node": "planner_deep_day",
+        "status": "ok",
+        "latency_ms": 0.374,
+        "detail": {
+          "day_index": 0,
+          "attempt": 1
+        }
+      },
+      {
+        "node": "plan_validate",
+        "status": "ok",
+        "detail": {
+          "day_index": 0
+        }
+      },
+      {
+        "node": "planner_deep_day",
+        "status": "ok",
+        "latency_ms": 0.216,
+        "detail": {
+          "day_index": 1,
+          "attempt": 1
+        }
+      },
+      {
+        "node": "plan_validate",
+        "status": "ok",
+        "detail": {
+          "day_index": 1
+        }
+      },
+      {
+        "node": "planner_deep",
+        "status": "ok",
+        "latency_ms": 2.541,
+        "detail": {
+          "days": 2,
+          "candidates": 24
+        }
+      },
+      {
+        "node": "plan_validate_global",
+        "status": "ok",
+        "latency_ms": 0.023,
+        "detail": {
+          "issues": 0
+        }
+      },
+      {
+        "node": "plan_output",
+        "status": "ok",
+        "detail": {
+          "has_plan": true,
+          "errors": 0
+        }
+      }
+    ],
+    "trace_id": "exp8-deep-sync-v1"
+  }
+}

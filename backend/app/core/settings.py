@@ -59,6 +59,55 @@ class Settings(BaseSettings):
     plan_fast_transport_mode: Literal["walk", "bike", "drive", "transit"] = Field(
         default="walk", validation_alias="PLAN_FAST_TRANSPORT_MODE"
     )
+
+    # --- Stage-8 Deep planner (LLM, day-by-day) ---
+    plan_deep_model: str | None = Field(
+        default=None, validation_alias="PLAN_DEEP_MODEL"
+    )
+    plan_deep_temperature: float = Field(
+        default=0.2, validation_alias="PLAN_DEEP_TEMPERATURE"
+    )
+    plan_deep_max_tokens: int = Field(
+        default=1200, validation_alias="PLAN_DEEP_MAX_TOKENS"
+    )
+    plan_deep_timeout_s: float = Field(
+        default=30.0, validation_alias="PLAN_DEEP_TIMEOUT_S"
+    )
+    plan_deep_retries: int = Field(default=1, validation_alias="PLAN_DEEP_RETRIES")
+    plan_deep_prompt_version: str = Field(
+        default="v1", validation_alias="PLAN_DEEP_PROMPT_VERSION"
+    )
+    plan_deep_max_pois: int = Field(default=24, validation_alias="PLAN_DEEP_MAX_POIS")
+    plan_deep_max_days: int = Field(default=7, validation_alias="PLAN_DEEP_MAX_DAYS")
+    plan_deep_fallback_to_fast: bool = Field(
+        default=True, validation_alias="PLAN_DEEP_FALLBACK_TO_FAST"
+    )
+    plan_deep_day_max_tokens: int = Field(
+        default=900, validation_alias="PLAN_DEEP_DAY_MAX_TOKENS"
+    )
+    plan_deep_context_max_days: int = Field(
+        default=3, validation_alias="PLAN_DEEP_CONTEXT_MAX_DAYS"
+    )
+    plan_deep_context_max_chars: int = Field(
+        default=1800, validation_alias="PLAN_DEEP_CONTEXT_MAX_CHARS"
+    )
+    plan_deep_outline_source: Literal["fast", "llm_outline"] = Field(
+        default="fast", validation_alias="PLAN_DEEP_OUTLINE_SOURCE"
+    )
+
+    # --- Stage-8 Async tasks (ai_tasks) ---
+    plan_task_worker_concurrency: int = Field(
+        default=2, validation_alias="PLAN_TASK_WORKER_CONCURRENCY"
+    )
+    plan_task_queue_maxsize: int = Field(
+        default=200, validation_alias="PLAN_TASK_QUEUE_MAXSIZE"
+    )
+    plan_task_max_running_per_user: int = Field(
+        default=1, validation_alias="PLAN_TASK_MAX_RUNNING_PER_USER"
+    )
+    plan_task_retention_days: int = Field(
+        default=7, validation_alias="PLAN_TASK_RETENTION_DAYS"
+    )
     plan_metrics_backend: Literal["memory", "redis"] = Field(
         default="memory",
         validation_alias="PLAN_METRICS_BACKEND",

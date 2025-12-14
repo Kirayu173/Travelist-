@@ -31,6 +31,8 @@ class PlanCallEntry:
     latency_ms: float
     success: bool
     error: str | None = None
+    llm_tokens_total: int | None = None
+    fallback_to_fast: bool | None = None
     recorded_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -45,6 +47,8 @@ class PlanMetricsBackend(Protocol):
         latency_ms: float,
         success: bool,
         error: str | None = None,
+        llm_tokens_total: int | None = None,
+        fallback_to_fast: bool | None = None,
     ) -> None: ...
 
     def snapshot(self, *, top_n: int = 8) -> dict: ...
@@ -61,6 +65,11 @@ class InMemoryPlanMetricsBackend:
         self._fast_failures = 0
         self._fast_total_days = 0
         self._fast_latencies_ms: Deque[float] = deque(maxlen=500)
+        self._deep_calls = 0
+        self._deep_failures = 0
+        self._deep_latencies_ms: Deque[float] = deque(maxlen=500)
+        self._deep_llm_tokens_total = 0
+        self._deep_fallbacks = 0
         self._destinations = Counter()
         self._lock = Lock()
 
@@ -74,6 +83,8 @@ class InMemoryPlanMetricsBackend:
         latency_ms: float,
         success: bool,
         error: str | None = None,
+        llm_tokens_total: int | None = None,
+        fallback_to_fast: bool | None = None,
     ) -> None:
         with self._lock:
             if mode == "fast":
@@ -83,6 +94,15 @@ class InMemoryPlanMetricsBackend:
                 self._destinations.update([destination])
                 if not success:
                     self._fast_failures += 1
+            elif mode == "deep":
+                self._deep_calls += 1
+                self._deep_latencies_ms.append(float(latency_ms))
+                if llm_tokens_total is not None:
+                    self._deep_llm_tokens_total += max(int(llm_tokens_total), 0)
+                if fallback_to_fast:
+                    self._deep_fallbacks += 1
+                if not success:
+                    self._deep_failures += 1
 
             self._history.appendleft(
                 PlanCallEntry(
@@ -93,6 +113,8 @@ class InMemoryPlanMetricsBackend:
                     latency_ms=float(latency_ms),
                     success=success,
                     error=error,
+                    llm_tokens_total=llm_tokens_total,
+                    fallback_to_fast=fallback_to_fast,
                 )
             )
 
@@ -107,6 +129,16 @@ class InMemoryPlanMetricsBackend:
             failure_rate = (
                 self._fast_failures / self._fast_calls if self._fast_calls else 0.0
             )
+
+            deep_latencies = list(self._deep_latencies_ms)
+            deep_avg_latency = mean(deep_latencies) if deep_latencies else 0.0
+            deep_p95 = _percentile(deep_latencies, 95)
+            deep_failure_rate = (
+                self._deep_failures / self._deep_calls if self._deep_calls else 0.0
+            )
+            deep_fallback_rate = (
+                self._deep_fallbacks / self._deep_calls if self._deep_calls else 0.0
+            )
             return {
                 "backend": "memory",
                 "plan_fast_calls": int(self._fast_calls),
@@ -115,6 +147,13 @@ class InMemoryPlanMetricsBackend:
                 "plan_fast_avg_days": round(avg_days, 3),
                 "plan_fast_latency_ms_mean": round(avg_latency, 3),
                 "plan_fast_latency_ms_p95": round(p95, 3),
+                "plan_deep_calls": int(self._deep_calls),
+                "plan_deep_failures": int(self._deep_failures),
+                "plan_deep_failure_rate": round(deep_failure_rate, 4),
+                "plan_deep_latency_ms_mean": round(deep_avg_latency, 3),
+                "plan_deep_latency_ms_p95": round(deep_p95, 3),
+                "plan_deep_llm_tokens_total": int(self._deep_llm_tokens_total),
+                "plan_deep_fallback_rate": round(deep_fallback_rate, 4),
                 "top_destinations": [
                     {"destination": dest, "count": int(count)}
                     for dest, count in self._destinations.most_common(max(top_n, 0))
@@ -131,6 +170,11 @@ class InMemoryPlanMetricsBackend:
             self._fast_failures = 0
             self._fast_total_days = 0
             self._fast_latencies_ms.clear()
+            self._deep_calls = 0
+            self._deep_failures = 0
+            self._deep_latencies_ms.clear()
+            self._deep_llm_tokens_total = 0
+            self._deep_fallbacks = 0
             self._destinations.clear()
 
 
@@ -166,6 +210,8 @@ class RedisPlanMetricsBackend:
         latency_ms: float,
         success: bool,
         error: str | None = None,
+        llm_tokens_total: int | None = None,
+        fallback_to_fast: bool | None = None,
     ) -> None:
         entry = PlanCallEntry(
             trace_id=trace_id,
@@ -175,6 +221,8 @@ class RedisPlanMetricsBackend:
             latency_ms=float(latency_ms),
             success=bool(success),
             error=error,
+            llm_tokens_total=llm_tokens_total,
+            fallback_to_fast=fallback_to_fast,
         )
         try:
             pipe = self._client.pipeline(transaction=False)
@@ -193,6 +241,23 @@ class RedisPlanMetricsBackend:
                 pipe.ltrim(self._key("fast_latencies_ms"), 0, self._latency_limit - 1)
                 if destination:
                     pipe.zincrby(self._key("destinations"), 1, destination)
+            elif mode == "deep":
+                pipe.hincrby(self._key("counts"), "deep_calls", 1)
+                pipe.hincrbyfloat(
+                    self._key("counts"), "deep_latency_sum_ms", float(latency_ms)
+                )
+                if llm_tokens_total is not None:
+                    pipe.hincrby(
+                        self._key("counts"),
+                        "deep_llm_tokens_total",
+                        max(int(llm_tokens_total), 0),
+                    )
+                if fallback_to_fast:
+                    pipe.hincrby(self._key("counts"), "deep_fallbacks", 1)
+                if not success:
+                    pipe.hincrby(self._key("counts"), "deep_failures", 1)
+                pipe.lpush(self._key("deep_latencies_ms"), str(float(latency_ms)))
+                pipe.ltrim(self._key("deep_latencies_ms"), 0, self._latency_limit - 1)
             pipe.execute()
         except RedisError as exc:
             self._logger.warning(
@@ -207,6 +272,11 @@ class RedisPlanMetricsBackend:
             fast_failures = int(float(counts.get("fast_failures") or 0))
             fast_total_days = int(float(counts.get("fast_total_days") or 0))
             fast_latency_sum = float(counts.get("fast_latency_sum_ms") or 0.0)
+            deep_calls = int(float(counts.get("deep_calls") or 0))
+            deep_failures = int(float(counts.get("deep_failures") or 0))
+            deep_latency_sum = float(counts.get("deep_latency_sum_ms") or 0.0)
+            deep_tokens_total = int(float(counts.get("deep_llm_tokens_total") or 0))
+            deep_fallbacks = int(float(counts.get("deep_fallbacks") or 0))
 
             lat_raw = self._client.lrange(self._key("fast_latencies_ms"), 0, -1) or []
             latencies: list[float] = []
@@ -219,6 +289,20 @@ class RedisPlanMetricsBackend:
             p95 = _percentile(latencies, 95)
             avg_days = (fast_total_days / fast_calls) if fast_calls else 0.0
             failure_rate = (fast_failures / fast_calls) if fast_calls else 0.0
+
+            deep_lat_raw = (
+                self._client.lrange(self._key("deep_latencies_ms"), 0, -1) or []
+            )
+            deep_latencies: list[float] = []
+            for item in deep_lat_raw:
+                try:
+                    deep_latencies.append(float(item))
+                except ValueError:
+                    continue
+            deep_avg_latency = (deep_latency_sum / deep_calls) if deep_calls else 0.0
+            deep_p95 = _percentile(deep_latencies, 95)
+            deep_failure_rate = (deep_failures / deep_calls) if deep_calls else 0.0
+            deep_fallback_rate = (deep_fallbacks / deep_calls) if deep_calls else 0.0
 
             top_pairs = self._client.zrevrange(
                 self._key("destinations"),
@@ -246,6 +330,13 @@ class RedisPlanMetricsBackend:
                 "plan_fast_avg_days": round(avg_days, 3),
                 "plan_fast_latency_ms_mean": round(avg_latency, 3),
                 "plan_fast_latency_ms_p95": round(p95, 3),
+                "plan_deep_calls": deep_calls,
+                "plan_deep_failures": deep_failures,
+                "plan_deep_failure_rate": round(deep_failure_rate, 4),
+                "plan_deep_latency_ms_mean": round(deep_avg_latency, 3),
+                "plan_deep_latency_ms_p95": round(deep_p95, 3),
+                "plan_deep_llm_tokens_total": deep_tokens_total,
+                "plan_deep_fallback_rate": round(deep_fallback_rate, 4),
                 "top_destinations": top_destinations,
                 "last_10_calls": last_10_calls,
             }
@@ -262,6 +353,7 @@ class RedisPlanMetricsBackend:
                 self._key("counts"),
                 self._key("history"),
                 self._key("fast_latencies_ms"),
+                self._key("deep_latencies_ms"),
                 self._key("destinations"),
             )
         except RedisError:

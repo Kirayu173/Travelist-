@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}AI 任务监控 - Travelist+ Admin{% endblock %}
+{% block header %}AI 任务监控 · Stage-8 ai_tasks{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-slate-800">AI 任务监控</h1>
+    <p class="text-slate-500 mt-1">异步任务状态分布 · 失败原因聚合 · 耗时口径（mean/p95）</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Queued</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-queued">{{ summary.counts.queued or 0 }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Running</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-running">{{ summary.counts.running or 0 }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Succeeded</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-succeeded">{{ summary.counts.succeeded or 0 }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Failed</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-failed">{{ summary.counts.failed or 0 }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Latency Mean</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-lat-mean">{{ summary.latency_ms_mean or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-2">ms / task</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Latency P95</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-lat-p95">{{ summary.latency_ms_p95 or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-2">ms / task</div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h3 class="font-semibold text-slate-800">最近任务</h3>
+                <p class="text-xs text-slate-500 mt-1">默认展示 kind=plan:deep，可用于排障与回归</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="refreshTasks()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">刷新</button>
+                <a href="/admin/plan/overview" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">去规划管理</a>
+            </div>
+        </div>
+        <div class="p-6">
+            <div id="tasks-table" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100">
+        <div class="p-6 border-b border-slate-100">
+            <h3 class="font-semibold text-slate-800">失败原因 Top</h3>
+            <p class="text-xs text-slate-500 mt-1">按 error.type / code 聚合（最近 200 条 failed）</p>
+        </div>
+        <div class="p-6">
+            <div id="failures-list" class="space-y-2"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+function badge(status) {
+  const map = {
+    queued: "bg-slate-100 text-slate-700",
+    running: "bg-blue-100 text-blue-700",
+    succeeded: "bg-green-100 text-green-700",
+    failed: "bg-red-100 text-red-700",
+    canceled: "bg-yellow-100 text-yellow-700",
+  };
+  return map[status] || "bg-slate-100 text-slate-700";
+}
+
+function renderTasks(tasks) {
+  const root = document.getElementById("tasks-table");
+  if (!tasks || !tasks.length) {
+    root.innerHTML = `<div class="text-slate-400">暂无任务</div>`;
+    return;
+  }
+  root.innerHTML = tasks.map(t => `
+    <div class="border border-slate-100 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="font-mono text-xs text-slate-600 truncate">task_id=${t.task_id} · trace_id=${t.trace_id}</div>
+        <div class="text-sm text-slate-700 mt-1">
+          <span class="text-slate-500">request_id:</span> ${t.request_id || "-"}
+          <span class="text-slate-500 ml-3">duration:</span> ${t.duration_ms == null ? "-" : (t.duration_ms + "ms")}
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <span class="${badge(t.status)} px-2 py-0.5 rounded text-xs font-medium">${t.status}</span>
+        <button class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold"
+          onclick="copyText('${t.task_id}')">复制 task_id</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderFailures(items) {
+  const root = document.getElementById("failures-list");
+  if (!items || !items.length) {
+    root.innerHTML = `<div class="text-slate-400">暂无失败记录</div>`;
+    return;
+  }
+  root.innerHTML = items.map(x => `
+    <div class="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2">
+      <div class="text-sm text-slate-700">${x.reason}</div>
+      <div class="text-xs text-slate-500">${x.count}</div>
+    </div>
+  `).join("");
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); } catch(e) { console.warn(e); }
+}
+
+async function refreshTasks() {
+  try {
+    const resp = await fetch("/admin/ai/tasks/summary?kind=plan:deep&limit=20");
+    if (!resp.ok) return;
+    const json = await resp.json();
+    if (json.code !== 0) return;
+    const d = json.data || {};
+    const c = d.counts || {};
+    document.getElementById("metric-queued").innerText = c.queued ?? 0;
+    document.getElementById("metric-running").innerText = c.running ?? 0;
+    document.getElementById("metric-succeeded").innerText = c.succeeded ?? 0;
+    document.getElementById("metric-failed").innerText = c.failed ?? 0;
+    document.getElementById("metric-lat-mean").innerText = d.latency_ms_mean ?? 0;
+    document.getElementById("metric-lat-p95").innerText = d.latency_ms_p95 ?? 0;
+    renderTasks(d.recent_tasks || []);
+    renderFailures(d.top_failures || []);
+  } catch (e) {
+    console.warn("refreshTasks failed", e);
+  }
+}
+
+renderTasks({{ (summary.recent_tasks or [])|tojson }});
+renderFailures({{ (summary.top_failures or [])|tojson }});
+refreshTasks();
+</script>
+{% endblock %}
+

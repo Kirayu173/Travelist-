@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import date, timedelta
 
 import pytest
@@ -15,6 +16,13 @@ from sqlalchemy import text
 
 def _allow_writes() -> bool:
     return os.environ.get("PROD_TEST_ALLOW_WRITES", "").strip() == "1"
+
+
+def _allow_task_writes() -> bool:
+    return (
+        _allow_writes()
+        or os.environ.get("PROD_TEST_ALLOW_TASK_WRITES", "").strip() == "1"
+    )
 
 
 def _pick_user_id() -> int:
@@ -134,7 +142,7 @@ def test_prod_plan_fast_happy_path_is_deterministic(prod_client: TestClient) -> 
     assert {"plan_input", "planner_fast", "plan_validate", "plan_output"} <= set(nodes)
 
 
-def test_prod_plan_deep_returns_not_implemented(prod_client: TestClient) -> None:
+def test_prod_plan_deep_sync_happy_path_or_fallback(prod_client: TestClient) -> None:
     user_id = _pick_user_id()
     destination = _pick_destination()
     start = date.today()
@@ -148,11 +156,16 @@ def test_prod_plan_deep_returns_not_implemented(prod_client: TestClient) -> None
             "end_date": end.isoformat(),
             "mode": "deep",
             "save": False,
+            "seed_mode": "fast",
+            "async": False,
         },
     )
-    assert resp.status_code == 400
     payload = resp.json()
-    assert payload["code"] == 14071
+    assert resp.status_code in {200, 400}
+    if resp.status_code == 400:
+        assert payload["code"] in {14089, 14070}
+        return
+    assert payload["code"] == 0
     assert payload["data"]["mode"] == "deep"
 
 
@@ -228,6 +241,89 @@ def test_prod_admin_plan_summary_reflects_calls(prod_client: TestClient) -> None
         assert data["plan_fast_calls"] >= 1
         return
     assert summary_resp.status_code == 401
+
+
+def test_prod_admin_ai_tasks_summary_auth(prod_client: TestClient) -> None:
+    resp = prod_client.get("/admin/ai/tasks/summary")
+    if not settings.admin_api_token and not settings.admin_allowed_ips:
+        assert resp.status_code == 200
+        return
+    assert resp.status_code == 401
+
+    token = settings.admin_api_token
+    if token:
+        resp2 = prod_client.get(
+            "/admin/ai/tasks/summary",
+            headers={"X-Admin-Token": token},
+        )
+        assert resp2.status_code == 200
+
+
+def test_prod_admin_ai_tasks_page_renders(prod_client: TestClient) -> None:
+    token = settings.admin_api_token
+    headers = {"X-Admin-Token": token} if token else {}
+    resp = prod_client.get("/admin/ai/tasks", headers=headers)
+    if token or (not settings.admin_api_token and not settings.admin_allowed_ips):
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers.get("content-type", "")
+        return
+    assert resp.status_code == 401
+
+
+@pytest.mark.skipif(not _allow_task_writes(), reason="PROD_TEST_ALLOW_TASK_WRITES!=1")
+def test_prod_plan_deep_async_task_roundtrip(prod_client: TestClient) -> None:
+    user_id = _pick_user_id()
+    destination = _pick_destination()
+    start = date.today()
+    end = start
+    request_id = f"prod_deep_async_{start.isoformat()}_{user_id}"
+    resp = prod_client.post(
+        "/api/ai/plan",
+        json={
+            "user_id": user_id,
+            "destination": destination,
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "mode": "deep",
+            "save": False,
+            "seed_mode": "fast",
+            "async": True,
+            "request_id": request_id,
+            "preferences": {"interests": ["sight", "food"], "pace": "normal"},
+            "seed": 7,
+        },
+    )
+    assert resp.status_code == 200
+    created = resp.json()
+    assert created["code"] == 0
+    data = created["data"]
+    task_id = data.get("task_id")
+    assert isinstance(task_id, str) and task_id
+
+    task_payload: dict | None = None
+    status: str | None = None
+    for _ in range(120):
+        poll = prod_client.get(
+            f"/api/ai/plan/tasks/{task_id}",
+            params={"user_id": user_id},
+        )
+        assert poll.status_code == 200
+        task_payload = poll.json()
+        assert task_payload["code"] == 0
+        status = (task_payload.get("data") or {}).get("status")
+        if status in {"succeeded", "failed", "canceled"}:
+            break
+        time.sleep(0.1)
+
+    assert task_payload is not None
+    assert status in {"succeeded", "failed", "canceled"}
+    if status == "succeeded":
+        result = (task_payload.get("data") or {}).get("result") or {}
+        assert result.get("mode") == "deep"
+        assert result.get("plan") is not None
+    if status == "failed":
+        error = (task_payload.get("data") or {}).get("error") or {}
+        assert isinstance(error, dict)
 
 
 @pytest.mark.skipif(not _allow_writes(), reason="PROD_TEST_ALLOW_WRITES!=1")

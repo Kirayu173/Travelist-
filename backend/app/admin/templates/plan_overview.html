@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
 {% block title %}规划管理 - Travelist+ Admin{% endblock %}
-{% block header %}规划管理 · Stage-7 Fast Planner{% endblock %}
+{% block header %}规划管理 · Stage-8 Fast vs Deep Planner{% endblock %}
 
 {% block content %}
 <div class="mb-6">
     <h1 class="text-2xl font-bold text-slate-800">规划管理</h1>
-    <p class="text-slate-500 mt-1">Fast 规则规划可观测 · 快捷测试台（预留 Deep 模式）</p>
+    <p class="text-slate-500 mt-1">Fast/Deep 可观测 · 快捷测试台（同步/异步 task_id）</p>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -16,9 +16,9 @@
         <div class="text-xs text-slate-400 mt-2">failures: <span id="metric-fast-failures">{{ summary.plan_fast_failures or 0 }}</span></div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
-        <div class="text-slate-500 text-sm font-medium mb-1">Fast 平均天数</div>
-        <div class="text-3xl font-bold text-slate-800" id="metric-fast-days">{{ summary.plan_fast_avg_days or 0 }}</div>
-        <div class="text-xs text-slate-400 mt-2">avg days / request</div>
+        <div class="text-slate-500 text-sm font-medium mb-1">Deep 调用次数</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-deep-calls">{{ summary.plan_deep_calls or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-2">failures: <span id="metric-deep-failures">{{ summary.plan_deep_failures or 0 }}</span></div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
         <div class="text-slate-500 text-sm font-medium mb-1">Fast 延迟均值</div>
@@ -26,9 +26,29 @@
         <div class="text-xs text-slate-400 mt-2">ms / request</div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Deep 延迟均值</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-deep-lat-mean">{{ summary.plan_deep_latency_ms_mean or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-2">ms / request</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
         <div class="text-slate-500 text-sm font-medium mb-1">Fast 延迟 P95</div>
         <div class="text-3xl font-bold text-slate-800" id="metric-fast-lat-p95">{{ summary.plan_fast_latency_ms_p95 or 0 }}</div>
         <div class="text-xs text-slate-400 mt-2">ms / request</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Deep 延迟 P95</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-deep-lat-p95">{{ summary.plan_deep_latency_ms_p95 or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-2">ms / request</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Deep Tokens Total</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-deep-tokens">{{ summary.plan_deep_llm_tokens_total or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-2">fallback_rate: <span id="metric-deep-fallback">{{ summary.plan_deep_fallback_rate or 0 }}</span></div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
+        <div class="text-slate-500 text-sm font-medium mb-1">Fast 平均天数</div>
+        <div class="text-3xl font-bold text-slate-800" id="metric-fast-days">{{ summary.plan_fast_avg_days or 0 }}</div>
+        <div class="text-xs text-slate-400 mt-2">avg days / request</div>
     </div>
 </div>
 
@@ -112,20 +132,26 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-slate-100">
-            <div class="p-6 border-b border-slate-100">
-                <h3 class="font-semibold text-slate-800">Deep 模式测试台（预留 Stage-8）</h3>
-                <p class="text-xs text-slate-500 mt-1">Stage-7 不实现 deep：用于占位字段与交互框架，便于后续无痛接入异步 task_id 流程。</p>
+            <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h3 class="font-semibold text-slate-800">Deep 模式便捷测试台</h3>
+                    <p class="text-xs text-slate-500 mt-1">支持同步 deep 与异步 task_id（<span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">POST /api/ai/plan</span> + <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">GET /api/ai/plan/tasks/{task_id}</span>）</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-deep-run" onclick="runDeepPlan()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">运行 Deep</button>
+                    <button onclick="fillDeepSample()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">填充示例</button>
+                </div>
             </div>
             <div class="p-6 grid grid-cols-12 gap-4">
                 <div class="col-span-4">
-                    <label class="block text-xs font-medium text-slate-600 mb-1">request_id（建议填唯一值）</label>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">request_id（幂等键：同 request_id 重复提交不会创建新任务）</label>
                     <input id="deep-request-id" type="text" value="dev_deep_request_1" class="w-full border border-slate-200 rounded-md px-3 py-2 text-sm">
                 </div>
                 <div class="col-span-3">
                     <label class="block text-xs font-medium text-slate-600 mb-1">async</label>
                     <select id="deep-async" class="w-full border border-slate-200 rounded-md px-3 py-2 text-sm bg-white">
-                        <option value="true" selected>true</option>
-                        <option value="false">false</option>
+                        <option value="false" selected>false（同步）</option>
+                        <option value="true">true（异步）</option>
                     </select>
                 </div>
                 <div class="col-span-3">
@@ -135,12 +161,43 @@
                         <option value="fast" selected>fast</option>
                     </select>
                 </div>
-                <div class="col-span-2 flex items-end">
-                    <button id="btn-deep-run" onclick="runDeepPlaceholder()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors w-full">运行 Deep(占位)</button>
+                <div class="col-span-2">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">save</label>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <input id="deep-save" type="checkbox" class="h-4 w-4">
+                        <span class="text-xs text-slate-600">落库</span>
+                    </label>
+                </div>
+
+                <div class="col-span-6">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">task_id（异步返回后可粘贴轮询）</label>
+                    <div class="flex items-center gap-2">
+                        <input id="deep-task-id" type="text" placeholder="e.g. 123" class="flex-1 border border-slate-200 rounded-md px-3 py-2 text-sm">
+                        <button onclick="pollDeepTask()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">轮询</button>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-1">task_status: <span id="deep-task-status">-</span> · trace: <span id="deep-trace">-</span></div>
+                </div>
+                <div class="col-span-6">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">自动轮询</label>
+                    <div class="flex items-center gap-2">
+                        <button onclick="startDeepPolling()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">开始</button>
+                        <button onclick="stopDeepPolling()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">停止</button>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-1">异步任务在 succeeded/failed 时会自动停止</div>
+                </div>
+
+                <div class="col-span-6">
+                    <div class="text-xs font-semibold text-slate-700 mb-2">Plan Response</div>
+                    <pre id="deep-response" class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto h-56"></pre>
+                </div>
+                <div class="col-span-6">
+                    <div class="text-xs font-semibold text-slate-700 mb-2">Task Status</div>
+                    <pre id="deep-task" class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto h-56"></pre>
                 </div>
 
                 <div class="col-span-12">
-                    <pre id="deep-response" class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto h-40"></pre>
+                    <div class="text-xs font-semibold text-slate-700 mb-2">tool_traces（Deep：按天 + 全局校验）</div>
+                    <div id="deep-traces" class="space-y-2 text-xs text-slate-700"></div>
                 </div>
             </div>
         </div>
@@ -148,7 +205,7 @@
 
     <div class="space-y-6">
         <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-            <h3 class="font-semibold text-slate-800 mb-3">测试指导（Fast）</h3>
+            <h3 class="font-semibold text-slate-800 mb-3">测试指导（Fast/Deep）</h3>
             <div class="text-sm text-slate-700 space-y-2 leading-6">
                 <p>1) 选择 <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">user_id</span>（仅用于输出归属；save=true 时要求该用户存在）。</p>
                 <p>2) 填写目的地与日期范围：确保 <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">end_date &gt;= start_date</span>，且天数不超过 <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">PLAN_MAX_DAYS</span>。</p>
@@ -160,11 +217,17 @@
                 </ul>
                 <p>4) 复现性测试：固定 seed 与输入，多次运行应得到一致结果；更换 seed 可观察轻微差异（兴趣轮转/POI 选择）。</p>
                 <p>5) 降级测试：将 interests 设为非常冷门类型，或清空 POI 数据，仍应返回 200 且包含“自由探索”子行程，而不是 500。</p>
+                <p class="pt-2 font-semibold text-slate-800">Deep 测试建议：</p>
+                <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+                    <li>同步：将 async 设为 false，运行后检查 <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">planner_deep_day / plan_validate_global</span> 等轨迹。</li>
+                    <li>异步：将 async 设为 true，记录返回的 <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">task_id</span>，使用轮询区查看 queued/running/succeeded/failed 状态与最终 result。</li>
+                    <li>幂等：固定 request_id 重复提交，应该返回相同 task_id（payload 不一致时应报错）。</li>
+                </ul>
             </div>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-            <h3 class="font-semibold text-slate-800 mb-3">最近调用（Fast）</h3>
+            <h3 class="font-semibold text-slate-800 mb-3">最近调用（Fast/Deep）</h3>
             <div id="plan-last-calls" class="space-y-2 text-xs text-slate-700"></div>
         </div>
     </div>
@@ -223,8 +286,8 @@ function buildFastPayload() {
   };
 }
 
-function renderTraces(traces) {
-  const root = document.getElementById("fast-traces");
+function renderTraces(traces, targetId) {
+  const root = document.getElementById(targetId || "fast-traces");
   if (!traces || !traces.length) {
     root.innerHTML = `<div class="text-slate-400">暂无轨迹</div>`;
     return;
@@ -254,12 +317,17 @@ function renderLastCalls(calls) {
     return;
   }
   root.innerHTML = calls.map(c => {
+    const mode = (c.mode || "fast").toLowerCase();
+    const modeCls = mode === "deep" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700";
     const okCls = c.success ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
     return `
       <div class="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2">
         <div class="space-y-1">
           <div class="font-mono text-[11px] text-slate-600">${(c.trace_id || '').slice(0, 18)}...</div>
-          <div class="text-slate-600">${c.destination} · ${c.days}天 · ${c.latency_ms}ms</div>
+          <div class="text-slate-600 flex items-center gap-2">
+            <span class="${modeCls} px-2 py-0.5 rounded text-[11px] font-semibold">${mode}</span>
+            <span>${c.destination} · ${c.days}天 · ${c.latency_ms}ms</span>
+          </div>
         </div>
         <span class="${okCls} px-2 py-0.5 rounded text-xs font-medium">${c.success ? "OK" : "FAIL"}</span>
       </div>
@@ -279,6 +347,12 @@ async function refreshSummary() {
     document.getElementById("metric-fast-days").innerText = d.plan_fast_avg_days ?? 0;
     document.getElementById("metric-fast-lat-mean").innerText = d.plan_fast_latency_ms_mean ?? 0;
     document.getElementById("metric-fast-lat-p95").innerText = d.plan_fast_latency_ms_p95 ?? 0;
+    document.getElementById("metric-deep-calls").innerText = d.plan_deep_calls ?? 0;
+    document.getElementById("metric-deep-failures").innerText = d.plan_deep_failures ?? 0;
+    document.getElementById("metric-deep-lat-mean").innerText = d.plan_deep_latency_ms_mean ?? 0;
+    document.getElementById("metric-deep-lat-p95").innerText = d.plan_deep_latency_ms_p95 ?? 0;
+    document.getElementById("metric-deep-tokens").innerText = d.plan_deep_llm_tokens_total ?? 0;
+    document.getElementById("metric-deep-fallback").innerText = d.plan_deep_fallback_rate ?? 0;
     renderLastCalls(d.last_10_calls || []);
   } catch (e) {
     console.warn("refreshSummary failed", e);
@@ -293,7 +367,7 @@ async function runFastPlan() {
     document.getElementById("fast-request").textContent = pretty(payload);
     document.getElementById("fast-response").textContent = "Loading...";
     document.getElementById("fast-trace").textContent = "-";
-    renderTraces([]);
+    renderTraces([], "fast-traces");
 
     const resp = await fetch("/api/ai/plan", {
       method: "POST",
@@ -304,7 +378,7 @@ async function runFastPlan() {
     document.getElementById("fast-response").textContent = pretty(json);
     const trace = json?.data?.trace_id || json?.data?.traceId || json?.trace_id || "-";
     document.getElementById("fast-trace").textContent = trace;
-    renderTraces(json?.data?.tool_traces || []);
+    renderTraces(json?.data?.tool_traces || [], "fast-traces");
     await refreshSummary();
   } catch (e) {
     document.getElementById("fast-response").textContent = String(e);
@@ -334,24 +408,41 @@ async function copyFastPayload() {
   }
 }
 
-async function runDeepPlaceholder() {
+let deepPollTimer = null;
+
+function buildDeepPayload() {
+  const t = todayISO();
+  const interests = parseInterests(document.getElementById("fast-interests").value);
+  const pace = document.getElementById("fast-pace").value || undefined;
+  const preferences = { interests };
+  if (pace) preferences.pace = pace;
+  return {
+    user_id: Number(document.getElementById("fast-user-id").value || 1),
+    destination: document.getElementById("fast-destination").value || "广州",
+    start_date: document.getElementById("fast-start-date").value || t,
+    end_date: document.getElementById("fast-end-date").value || addDaysISO(t, 1),
+    mode: "deep",
+    save: document.getElementById("deep-save").checked,
+    preferences,
+    people_count: 1,
+    async: document.getElementById("deep-async").value === "true",
+    request_id: document.getElementById("deep-request-id").value || null,
+    seed_mode: document.getElementById("deep-seed-mode").value || null,
+  };
+}
+
+async function runDeepPlan() {
   const btn = document.getElementById("btn-deep-run");
   btn.disabled = true;
+  stopDeepPolling();
   try {
-    const t = todayISO();
-    const payload = {
-      user_id: Number(document.getElementById("fast-user-id").value || 1),
-      destination: document.getElementById("fast-destination").value || "广州",
-      start_date: document.getElementById("fast-start-date").value || t,
-      end_date: document.getElementById("fast-end-date").value || addDaysISO(t, 1),
-      mode: "deep",
-      save: false,
-      preferences: { interests: parseInterests(document.getElementById("fast-interests").value) },
-      people_count: 1,
-      async: document.getElementById("deep-async").value === "true",
-      request_id: document.getElementById("deep-request-id").value || null,
-      seed_mode: document.getElementById("deep-seed-mode").value || null,
-    };
+    const payload = buildDeepPayload();
+    document.getElementById("deep-response").textContent = "Loading...";
+    document.getElementById("deep-task").textContent = "";
+    document.getElementById("deep-task-status").textContent = "-";
+    document.getElementById("deep-trace").textContent = "-";
+    renderTraces([], "deep-traces");
+
     const resp = await fetch("/api/ai/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -359,6 +450,16 @@ async function runDeepPlaceholder() {
     });
     const json = await resp.json();
     document.getElementById("deep-response").textContent = pretty(json);
+    const trace = json?.data?.trace_id || json?.data?.traceId || json?.trace_id || "-";
+    document.getElementById("deep-trace").textContent = trace;
+
+    const taskId = json?.data?.task_id || null;
+    if (taskId) {
+      document.getElementById("deep-task-id").value = taskId;
+      startDeepPolling();
+    } else {
+      renderTraces(json?.data?.tool_traces || [], "deep-traces");
+    }
     await refreshSummary();
   } catch (e) {
     document.getElementById("deep-response").textContent = String(e);
@@ -367,7 +468,55 @@ async function runDeepPlaceholder() {
   }
 }
 
+async function pollDeepTask() {
+  const taskId = (document.getElementById("deep-task-id").value || "").trim();
+  if (!taskId) return;
+  try {
+    const resp = await fetch(`/api/ai/plan/tasks/${encodeURIComponent(taskId)}`);
+    const json = await resp.json();
+    document.getElementById("deep-task").textContent = pretty(json);
+    const status = json?.data?.status || "-";
+    document.getElementById("deep-task-status").textContent = status;
+    const trace = json?.data?.trace_id || json?.data?.result?.trace_id || "-";
+    document.getElementById("deep-trace").textContent = trace;
+    const resultTraces = json?.data?.result?.tool_traces || [];
+    if (resultTraces.length) {
+      renderTraces(resultTraces, "deep-traces");
+    }
+    if (["succeeded", "failed", "canceled"].includes(status)) {
+      stopDeepPolling();
+    }
+  } catch (e) {
+    console.warn("pollDeepTask failed", e);
+  }
+}
+
+function startDeepPolling() {
+  stopDeepPolling();
+  deepPollTimer = setInterval(pollDeepTask, 1200);
+  pollDeepTask();
+}
+
+function stopDeepPolling() {
+  if (deepPollTimer) {
+    clearInterval(deepPollTimer);
+    deepPollTimer = null;
+  }
+}
+
+function fillDeepSample() {
+  document.getElementById("deep-request-id").value = `dev_deep_request_${Date.now()}`;
+  document.getElementById("deep-async").value = "false";
+  document.getElementById("deep-seed-mode").value = "fast";
+  document.getElementById("deep-save").checked = false;
+  document.getElementById("deep-task-id").value = "";
+  document.getElementById("deep-response").textContent = "";
+  document.getElementById("deep-task").textContent = "";
+  renderTraces([], "deep-traces");
+}
+
 fillFastSample();
+fillDeepSample();
 refreshSummary();
 </script>
 {% endblock %}

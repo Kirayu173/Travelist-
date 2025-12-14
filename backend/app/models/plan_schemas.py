@@ -138,9 +138,11 @@ class PlanTaskSchema(BaseModel):
     )
     request_id: str | None = None
     seed_mode: SeedMode | None = None
+    trace_id: str
     created_at: dt_datetime
     updated_at: dt_datetime
-    result: PlanTripSchema | None = None
+    finished_at: dt_datetime | None = None
+    result: PlanResponseData | None = None
     error: dict[str, Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True)

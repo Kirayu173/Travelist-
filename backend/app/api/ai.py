@@ -10,8 +10,9 @@ from app.models.plan_schemas import PlanRequest
 from app.services.ai_chat_service import AiChatDemoService, get_ai_chat_service
 from app.services.assistant_service import AssistantService, get_assistant_service
 from app.services.plan_service import PlanServiceError, get_plan_service
+from app.services.plan_task_service import PlanTaskServiceError, get_plan_task_service
 from app.utils.responses import error_response, success_response
-from fastapi import APIRouter
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -29,10 +30,25 @@ def _assistant_service() -> AssistantService:
     "/plan",
     summary="行程规划（fast/deep 统一入口）",
     description=(
-        "Stage-7 仅实现 mode=fast（规则规划）；" "mode=deep 预留但返回未实现错误。"
+        "Stage-7 实现 mode=fast（规则规划）；Stage-8 扩展 mode=deep（按天多轮生成）。"
     ),
 )
 async def plan(payload: PlanRequest):
+    if payload.mode == "deep" and payload.async_:
+        task_service = get_plan_task_service()
+        try:
+            result = task_service.enqueue_deep_task(payload)
+        except PlanTaskServiceError as exc:
+            return JSONResponse(
+                status_code=400,
+                content=error_response(
+                    exc.message,
+                    code=exc.code,
+                    data={"trace_id": exc.trace_id, **(exc.data or {})},
+                ),
+            )
+        return success_response(result.model_dump(mode="json", by_alias=True))
+
     service = get_plan_service()
     try:
         result, _trip_id = await service.plan(payload)
@@ -51,6 +67,32 @@ async def plan(payload: PlanRequest):
             content=error_response("规划失败", code=14079, data={"error": str(exc)}),
         )
     return success_response(result.model_dump(mode="json", by_alias=True))
+
+
+@router.get(
+    "/plan/tasks/{task_id}",
+    summary="查询 Deep 规划任务状态",
+    description="Stage-8：轮询任务状态与结果（仅任务所属用户或 Admin 可读）。",
+)
+async def get_plan_task(
+    task_id: str,
+    request: Request,
+    user_id: int | None = Query(default=None, ge=1),
+):
+    service = get_plan_task_service()
+    try:
+        task = service.get_task(task_id, request=request, user_id=user_id)
+    except PlanTaskServiceError as exc:
+        status = 404 if exc.code == 14084 else 400
+        return JSONResponse(
+            status_code=status,
+            content=error_response(
+                exc.message,
+                code=exc.code,
+                data={"trace_id": exc.trace_id, **(exc.data or {})},
+            ),
+        )
+    return success_response(task.model_dump(mode="json", by_alias=True))
 
 
 async def _enqueue_sse_chunk(queue: asyncio.Queue[str], chunk: AiStreamChunk) -> None:

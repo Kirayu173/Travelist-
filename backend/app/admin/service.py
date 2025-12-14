@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import warnings
-from collections import deque
+from collections import Counter, deque
 from datetime import datetime, timezone
 from pathlib import Path
+from statistics import mean
 from typing import Any, Callable, Sequence
 
 from anyio import to_thread
@@ -23,7 +25,7 @@ from app.core.logging import get_logger
 from app.core.redis import check_redis_health
 from app.core.settings import settings
 from app.models.ai_schemas import PromptUpdatePayload
-from app.models.orm import ChatSession, Message
+from app.models.orm import AiTask, ChatSession, Message
 from app.services.plan_metrics import get_plan_metrics
 from app.services.poi_service import get_poi_service
 from app.utils.http_client import perform_internal_request
@@ -224,6 +226,124 @@ class AdminService:
 
     def get_ai_summary(self) -> dict[str, Any]:
         return self._ai_metrics.snapshot()
+
+    def get_ai_tasks_summary(
+        self,
+        *,
+        kind: str | None = "plan:deep",
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        limit = max(int(limit), 1)
+        kind_value = str(kind or "").strip() or None
+        status_map = {"pending": "queued", "done": "succeeded"}
+
+        def _normalize_status(value: Any) -> str:
+            raw = str(value or "")
+            normalized = status_map.get(raw, raw)
+            if normalized in {"queued", "running", "succeeded", "failed", "canceled"}:
+                return normalized
+            return normalized or "failed"
+
+        def _kind_filter():
+            if not kind_value:
+                return None
+            try:
+                return AiTask.payload["kind"].astext == kind_value
+            except Exception:
+                return None
+
+        with session_scope() as session:
+            counts_query = session.query(AiTask.status, func.count(AiTask.id))
+            kind_expr = _kind_filter()
+            if kind_expr is not None:
+                counts_query = counts_query.filter(kind_expr)
+            counts_rows = counts_query.group_by(AiTask.status).all()
+
+            status_counts: dict[str, int] = {}
+            for status, count in counts_rows:
+                key = _normalize_status(status)
+                status_counts[key] = status_counts.get(key, 0) + int(count or 0)
+            for key in ("queued", "running", "succeeded", "failed", "canceled"):
+                status_counts.setdefault(key, 0)
+
+            recent_query = session.query(AiTask)
+            if kind_expr is not None:
+                recent_query = recent_query.filter(kind_expr)
+            tasks = recent_query.order_by(AiTask.created_at.desc()).limit(limit).all()
+
+            failed_query = session.query(AiTask.error).filter(AiTask.status == "failed")
+            if kind_expr is not None:
+                failed_query = failed_query.filter(kind_expr)
+            failed_rows = (
+                failed_query.order_by(AiTask.created_at.desc()).limit(200).all()
+            )
+
+        durations_ms: list[float] = []
+        recent_tasks: list[dict[str, Any]] = []
+        for task in tasks:
+            finished_at = task.finished_at
+            if finished_at:
+                durations_ms.append(
+                    (finished_at - task.created_at).total_seconds() * 1000
+                )
+            payload = task.payload if isinstance(task.payload, dict) else {}
+            updated_at = task.finished_at or task.started_at or task.created_at
+            status = _normalize_status(task.status)
+            error_type = None
+            error_payload = {}
+            if task.error:
+                try:
+                    error_payload = (
+                        json.loads(task.error) if isinstance(task.error, str) else {}
+                    )
+                except Exception:
+                    error_payload = {"type": "task_error"}
+            if isinstance(error_payload, dict) and error_payload:
+                error_type = error_payload.get("type") or error_payload.get("code")
+            recent_tasks.append(
+                {
+                    "task_id": str(task.id),
+                    "kind": payload.get("kind"),
+                    "status": status,
+                    "request_id": payload.get("request_id"),
+                    "trace_id": payload.get("trace_id"),
+                    "created_at": task.created_at.isoformat(),
+                    "updated_at": updated_at.isoformat(),
+                    "finished_at": (
+                        task.finished_at.isoformat() if task.finished_at else None
+                    ),
+                    "duration_ms": round(durations_ms[-1], 3) if finished_at else None,
+                    "error_type": error_type,
+                }
+            )
+
+        avg_latency = mean(durations_ms) if durations_ms else 0.0
+        p95 = _percentile(durations_ms, 95)
+
+        failure_counter: Counter[str] = Counter()
+        for (payload,) in failed_rows:
+            reason = "failed"
+            if payload:
+                try:
+                    parsed = json.loads(payload) if isinstance(payload, str) else {}
+                    if isinstance(parsed, dict):
+                        reason = str(parsed.get("type") or parsed.get("code") or reason)
+                except Exception:
+                    reason = "failed"
+            failure_counter.update([reason])
+        top_failures = [
+            {"reason": reason, "count": int(count)}
+            for reason, count in failure_counter.most_common(8)
+        ]
+
+        return {
+            "kind": kind_value or "all",
+            "counts": status_counts,
+            "latency_ms_mean": round(avg_latency, 3),
+            "latency_ms_p95": round(p95, 3),
+            "top_failures": top_failures,
+            "recent_tasks": recent_tasks,
+        }
 
     def get_plan_summary(self) -> dict[str, Any]:
         return get_plan_metrics().snapshot()
@@ -965,6 +1085,24 @@ def _format_iso(value: Any) -> str | None:
         except Exception:  # pragma: no cover - defensive
             return str(value)
     return str(value)
+
+
+def _percentile(values: list[float], p: float) -> float:
+    if not values:
+        return 0.0
+    if p <= 0:
+        return float(min(values))
+    if p >= 100:
+        return float(max(values))
+    ordered = sorted(values)
+    k = (len(ordered) - 1) * (p / 100.0)
+    f = int(k)
+    c = min(f + 1, len(ordered) - 1)
+    if f == c:
+        return float(ordered[f])
+    d0 = ordered[f] * (c - k)
+    d1 = ordered[c] * (k - f)
+    return float(d0 + d1)
 
 
 _admin_service: AdminService | None = None

@@ -352,6 +352,45 @@ class Message(Base):
     session: Mapped["ChatSession"] = relationship(back_populates="messages")
 
 
+class AiTask(Base):
+    __tablename__ = "ai_tasks"
+    __table_args__ = (
+        sa.Index("ix_ai_tasks_created_at", "created_at"),
+        sa.Index("ix_ai_tasks_user_id", "user_id"),
+        sa.Index("ix_ai_tasks_status", "status"),
+        sa.Index("ix_ai_tasks_finished_at", "finished_at"),
+    )
+
+    id: Mapped[str] = mapped_column(sa.String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BIGINT_TYPE, nullable=False)
+    status: Mapped[str] = mapped_column(
+        sa.String(16),
+        nullable=False,
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        "request_json",
+        JSONType,
+        default=dict,
+    )
+    result: Mapped[dict[str, Any] | None] = mapped_column(
+        "result_json", JSONType, nullable=True
+    )
+    error: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=True,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=True,
+    )
+
+
 __all__ = [
     "User",
     "Trip",
@@ -363,4 +402,5 @@ __all__ = [
     "AiPrompt",
     "ChatSession",
     "Message",
+    "AiTask",
 ]

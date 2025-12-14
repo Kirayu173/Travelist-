@@ -282,6 +282,9 @@ class PoiService:
         limit: int,
     ) -> list[dict[str, Any]]:
         with session_scope() as session:
+            dialect = session.bind.dialect.name if session.bind else "postgresql"
+            if dialect != "postgresql":
+                return []
             stmt = text(
                 """
                     SELECT id, provider, provider_id, name, category, addr, rating,
@@ -312,16 +315,30 @@ class PoiService:
                 sa.bindparam("poi_type", type_=sa.String),
                 sa.bindparam("limit", type_=sa.Integer),
             )
-            rows = session.execute(
-                stmt,
-                {
-                    "lat": lat,
-                    "lng": lng,
-                    "radius": radius,
-                    "poi_type": poi_type,
-                    "limit": limit,
-                },
-            ).mappings()
+            try:
+                rows = session.execute(
+                    stmt,
+                    {
+                        "lat": lat,
+                        "lng": lng,
+                        "radius": radius,
+                        "poi_type": poi_type,
+                        "limit": limit,
+                    },
+                ).mappings()
+            except Exception as exc:  # pragma: no cover - best effort fallback
+                self._logger.warning(
+                    "poi.db_query_failed",
+                    extra={
+                        "error": str(exc),
+                        "lat": lat,
+                        "lng": lng,
+                        "radius": radius,
+                        "poi_type": poi_type,
+                        "limit": limit,
+                    },
+                )
+                return []
             payload: list[dict[str, Any]] = []
             for row in rows:
                 payload.append(
@@ -421,56 +438,32 @@ class PoiService:
 
         with session_scope() as session:
             dialect = session.bind.dialect.name if session.bind else "postgresql"
+            if dialect != "postgresql":
+                return
+
             for chunk in self._chunk(payloads, 100):
-                if dialect == "postgresql":
-                    insert_stmt = (
-                        postgresql.insert(Poi.__table__)
-                        .values(
-                            [
-                                {
-                                    "provider": row["provider"],
-                                    "provider_id": row["provider_id"],
-                                    "name": row["name"],
-                                    "category": row["category"],
-                                    "addr": row["addr"],
-                                    "rating": row["rating"],
-                                    "geom": sa.text(
-                                        f"ST_GeogFromText('SRID=4326;{row['geom_wkt']}')"
-                                    ),
-                                    "ext": row["ext"],
-                                }
-                                for row in chunk
-                            ]
-                        )
-                        .on_conflict_do_nothing(
-                            index_elements=["provider", "provider_id"]
-                        )
+                insert_stmt = (
+                    postgresql.insert(Poi.__table__)
+                    .values(
+                        [
+                            {
+                                "provider": row["provider"],
+                                "provider_id": row["provider_id"],
+                                "name": row["name"],
+                                "category": row["category"],
+                                "addr": row["addr"],
+                                "rating": row["rating"],
+                                "geom": sa.text(
+                                    f"ST_GeogFromText('SRID=4326;{row['geom_wkt']}')"
+                                ),
+                                "ext": row["ext"],
+                            }
+                            for row in chunk
+                        ]
                     )
-                    session.execute(insert_stmt)
-                else:
-                    for row in chunk:
-                        exists = (
-                            session.query(Poi)
-                            .filter(
-                                Poi.provider == row["provider"],
-                                Poi.provider_id == row["provider_id"],
-                            )
-                            .first()
-                        )
-                        if exists:
-                            continue
-                        session.add(
-                            Poi(
-                                provider=row["provider"],
-                                provider_id=row["provider_id"],
-                                name=row["name"],
-                                category=row["category"],
-                                addr=row["addr"],
-                                rating=row["rating"],
-                                geom=row["geom_wkt"],
-                                ext=row["ext"],
-                            )
-                        )
+                    .on_conflict_do_nothing(index_elements=["provider", "provider_id"])
+                )
+                session.execute(insert_stmt)
             session.commit()
 
     @staticmethod

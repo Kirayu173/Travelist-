@@ -302,6 +302,37 @@ def admin_ai_summary_data(
     return success_response(summary)
 
 
+@router.get("/ai/tasks/summary")
+def admin_ai_tasks_summary_data(
+    kind: str | None = Query(default="plan:deep"),
+    limit: int = Query(default=20, ge=1, le=200),
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> dict:
+    summary = admin_service.get_ai_tasks_summary(kind=kind, limit=limit)
+    return success_response(summary)
+
+
+@router.get("/ai/tasks", response_class=HTMLResponse)
+async def admin_ai_tasks_page(
+    request: Request,
+    kind: str | None = Query(default="plan:deep"),
+    admin_service: AdminService = Depends(get_admin_service),
+    _: None = Depends(verify_admin_access),
+) -> HTMLResponse:
+    summary = admin_service.get_ai_tasks_summary(kind=kind, limit=20)
+    context = {
+        "request": request,
+        "settings": settings,
+        "summary": summary,
+    }
+    response = templates.TemplateResponse(request, "ai_tasks.html", context)
+    token = request.query_params.get("token")
+    if token:
+        response.set_cookie("admin_token", token, httponly=True, samesite="lax")
+    return response
+
+
 @router.get("/plan/summary")
 def admin_plan_summary_data(
     admin_service: AdminService = Depends(get_admin_service),

@@ -1,0 +1,54 @@
+{
+  "common": {
+    "user_id": 1,
+    "destination": "杭州",
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-02",
+    "save": false,
+    "preferences": {
+      "interests": [
+        "food",
+        "sight",
+        "museum"
+      ],
+      "pace": "normal"
+    }
+  },
+  "fast": {
+    "user_id": 1,
+    "destination": "杭州",
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-02",
+    "save": false,
+    "preferences": {
+      "interests": [
+        "food",
+        "sight",
+        "museum"
+      ],
+      "pace": "normal"
+    },
+    "mode": "fast",
+    "seed": 7
+  },
+  "deep_sync": {
+    "user_id": 1,
+    "destination": "杭州",
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-02",
+    "save": false,
+    "preferences": {
+      "interests": [
+        "food",
+        "sight",
+        "museum"
+      ],
+      "pace": "normal"
+    },
+    "mode": "deep",
+    "async": false,
+    "request_id": "exp_deep_sync_2025-01-01_2",
+    "seed_mode": "fast",
+    "seed": 7
+  }
+}

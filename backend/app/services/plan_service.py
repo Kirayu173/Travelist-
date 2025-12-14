@@ -12,6 +12,7 @@ from app.core.logging import get_logger
 from app.models.orm import User
 from app.models.plan_schemas import PlanRequest, PlanResponseData, PlanTripSchema
 from app.models.schemas import DayCardCreate, SubTripCreate, TripCreate, TripSchema
+from app.services.deep_planner import DeepPlanner
 from app.services.fast_planner import FastPlanner
 from app.services.plan_metrics import get_plan_metrics
 from app.services.poi_service import PoiService, get_poi_service
@@ -35,7 +36,7 @@ class PlanServiceError(Exception):
 
 
 class PlanService:
-    """Unified planning entrypoint for Stage-7 (fast) and Stage-8 (deep placeholder)."""
+    """Unified planning entrypoint for Stage-7 fast and Stage-8 deep planning."""
 
     def __init__(
         self,
@@ -46,16 +47,29 @@ class PlanService:
         self._poi_service = poi_service or get_poi_service()
         self._trip_service = trip_service or TripService()
         self._fast_planner = FastPlanner(poi_service=self._poi_service)
-        self._nodes = PlannerNodes(fast_planner=self._fast_planner)
+        self._deep_planner = DeepPlanner(
+            fast_planner=self._fast_planner,
+            poi_service=self._poi_service,
+        )
+        self._nodes = PlannerNodes(
+            fast_planner=self._fast_planner,
+            deep_planner=self._deep_planner,
+        )
         self._graph = build_planner_graph(self._nodes)
         self._metrics = get_plan_metrics()
         self._logger = get_logger(__name__)
 
-    async def plan(self, request: PlanRequest) -> tuple[PlanResponseData, int | None]:
-        trace_id = f"plan-{uuid.uuid4().hex[:12]}"
+    async def plan(
+        self,
+        request: PlanRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> tuple[PlanResponseData, int | None]:
+        trace_id = trace_id or f"plan-{uuid.uuid4().hex[:12]}"
         t0 = perf_counter()
-
-        if request.mode != "fast":
+        if request.mode == "fast":
+            request = request.model_copy(update={"async_": False})
+        if request.mode == "deep" and request.async_:
             elapsed_ms = (perf_counter() - t0) * 1000
             self._metrics.record(
                 trace_id=trace_id,
@@ -64,17 +78,16 @@ class PlanService:
                 days=request.day_count,
                 latency_ms=elapsed_ms,
                 success=False,
-                error="mode_not_supported",
+                error="async_not_implemented",
             )
             raise PlanServiceError(
-                "mode=deep 尚未实现（Stage-8 预留）",
-                code=14071,
+                "mode=deep async 尚未启用（Stage-8 task worker 未初始化）",
+                code=14088,
                 trace_id=trace_id,
                 data={
                     "mode": request.mode,
-                    "async": request.async_,
+                    "async": True,
                     "request_id": request.request_id,
-                    "seed_mode": request.seed_mode,
                 },
             )
 
@@ -144,36 +157,42 @@ class PlanService:
             )
             self._metrics.record(
                 trace_id=trace_id,
-                mode="fast",
+                mode=request.mode,
                 destination=request.destination,
                 days=request.day_count,
                 latency_ms=elapsed_ms,
                 success=True,
                 error=None,
+                llm_tokens_total=metrics.get("llm_tokens_total"),
+                fallback_to_fast=bool(metrics.get("fallback_to_fast")),
             )
             return response, trip_id
         except PlanServiceError as exc:
             elapsed_ms = (perf_counter() - t0) * 1000
             self._metrics.record(
                 trace_id=trace_id,
-                mode="fast",
+                mode=request.mode,
                 destination=request.destination,
                 days=request.day_count,
                 latency_ms=elapsed_ms,
                 success=False,
                 error=exc.message,
+                llm_tokens_total=None,
+                fallback_to_fast=None,
             )
             raise
         except Exception as exc:  # pragma: no cover - defensive
             elapsed_ms = (perf_counter() - t0) * 1000
             self._metrics.record(
                 trace_id=trace_id,
-                mode="fast",
+                mode=request.mode,
                 destination=request.destination,
                 days=request.day_count,
                 latency_ms=elapsed_ms,
                 success=False,
                 error=str(exc),
+                llm_tokens_total=None,
+                fallback_to_fast=None,
             )
             self._logger.exception("plan.unhandled_error", extra={"trace_id": trace_id})
             raise PlanServiceError(

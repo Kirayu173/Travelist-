@@ -26,6 +26,9 @@ class AiChatRequest(BaseModel):
     messages: list[AiMessage]
     response_format: ResponseFormat = "text"
     timeout_s: float = Field(default=30.0, ge=1.0, le=120.0)
+    model: str | None = None
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=8192)
 
     @field_validator("messages")
     @classmethod

@@ -6,20 +6,23 @@ from typing import Any
 from app.agents.planner.state import PlannerState
 from app.core.logging import get_logger
 from app.models.plan_schemas import PlanRequest
+from app.services.deep_planner import DeepPlanner, DeepPlannerError
 from app.services.fast_planner import FastPlanner, FastPlannerError
 from app.services.plan_validator import PlanValidationError, PlanValidator
 
 
 class PlannerNodes:
-    """LangGraph nodes for Stage-7 planning (mode=fast)."""
+    """LangGraph nodes for planning (fast/deep)."""
 
     def __init__(
         self,
         *,
         fast_planner: FastPlanner,
+        deep_planner: DeepPlanner,
         validator: PlanValidator | None = None,
     ) -> None:
         self._fast_planner = fast_planner
+        self._deep_planner = deep_planner
         self._validator = validator or PlanValidator()
         self._logger = get_logger(__name__)
 
@@ -92,6 +95,83 @@ class PlannerNodes:
                 detail={"error": str(exc), "code": 14079},
             )
 
+    async def planner_deep_node(self, state: PlannerState) -> PlannerState:
+        t0 = perf_counter()
+
+        def _trace(
+            node: str, status: str, latency_ms: float | None, detail: dict | None
+        ):
+            self._trace(
+                state,
+                node,
+                status=status,
+                latency_ms=latency_ms,
+                detail=detail,
+            )
+
+        try:
+            request = PlanRequest(
+                user_id=state.user_id,
+                destination=state.destination,
+                start_date=state.start_date,
+                end_date=state.end_date,
+                mode="deep",
+                save=state.save,
+                preferences=state.preferences,
+                people_count=state.people_count,
+                seed=state.seed,
+                async_=False,
+                request_id=state.request_id,
+                seed_mode=state.seed_mode,
+            )
+            plan, metrics = await self._deep_planner.plan(
+                request,
+                trace_id=state.trace_id,
+                trace=_trace,
+            )
+            state.result = plan
+            state.metrics.update(metrics)
+            return self._trace(
+                state,
+                "planner_deep",
+                status="ok",
+                latency_ms=(perf_counter() - t0) * 1000,
+                detail={
+                    "days": request.day_count,
+                    "candidates": metrics.get("candidate_pois"),
+                },
+            )
+        except DeepPlannerError as exc:
+            state.errors.append(
+                {
+                    "type": "planner_error",
+                    "message": exc.message,
+                    "code": exc.code,
+                }
+            )
+            return self._trace(
+                state,
+                "planner_deep",
+                status="error",
+                latency_ms=(perf_counter() - t0) * 1000,
+                detail={"error": exc.message, "code": exc.code},
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            state.errors.append(
+                {
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                    "code": 14089,
+                }
+            )
+            return self._trace(
+                state,
+                "planner_deep",
+                status="error",
+                latency_ms=(perf_counter() - t0) * 1000,
+                detail={"error": str(exc), "code": 14089},
+            )
+
     async def plan_validate_node(self, state: PlannerState) -> PlannerState:
         t0 = perf_counter()
         if state.result is None:
@@ -137,6 +217,56 @@ class PlannerNodes:
             return self._trace(
                 state,
                 "plan_validate",
+                status="error",
+                latency_ms=(perf_counter() - t0) * 1000,
+                detail={"error": exc.message, "issues": len(exc.issues)},
+            )
+
+    async def plan_validate_global_node(self, state: PlannerState) -> PlannerState:
+        t0 = perf_counter()
+        if state.result is None:
+            return self._trace(
+                state,
+                "plan_validate_global",
+                status="skipped",
+                latency_ms=(perf_counter() - t0) * 1000,
+                detail={"reason": "no_result"},
+            )
+        try:
+            request = PlanRequest(
+                user_id=state.user_id,
+                destination=state.destination,
+                start_date=state.start_date,
+                end_date=state.end_date,
+                mode=state.mode,
+                save=state.save,
+                preferences=state.preferences,
+                people_count=state.people_count,
+                seed=state.seed,
+                async_=state.async_,
+                request_id=state.request_id,
+                seed_mode=state.seed_mode,
+            )
+            self._validator.validate(request=request, plan=state.result)
+            return self._trace(
+                state,
+                "plan_validate_global",
+                status="ok",
+                latency_ms=(perf_counter() - t0) * 1000,
+                detail={"issues": 0},
+            )
+        except PlanValidationError as exc:
+            state.errors.append(
+                {
+                    "type": "validation_error",
+                    "message": exc.message,
+                    "issues": [issue.__dict__ for issue in exc.issues],
+                    "code": 14078,
+                }
+            )
+            return self._trace(
+                state,
+                "plan_validate_global",
                 status="error",
                 latency_ms=(perf_counter() - t0) * 1000,
                 detail={"error": exc.message, "issues": len(exc.issues)},
