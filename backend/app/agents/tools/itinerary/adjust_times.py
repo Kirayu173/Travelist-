@@ -9,7 +9,7 @@ from app.agents.tools.itinerary.session import (
     minutes_between,
     parse_hhmm,
 )
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field
 from pydantic.v1 import PrivateAttr
 
@@ -32,22 +32,17 @@ class ItineraryAdjustTimesInput(BaseModel):
     )
 
 
-class ItineraryAdjustTimesTool(StructuredTool):
+class ItineraryAdjustTimesTool(TravelistBaseTool):
     """修复某天 sub_trips 的时间连续性（避免重叠/缺失）。"""
+
+    name: str = "itinerary_adjust_times"
+    description: str = "修复某一天时间段：为缺失/冲突的 sub_trips 重新计算 start_time/end_time。"
+    args_schema: type[BaseModel] = ItineraryAdjustTimesInput
 
     _session: ItinerarySession = PrivateAttr()
 
     def __init__(self, session: ItinerarySession, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="itinerary_adjust_times",
-            description="修复某一天时间段：为缺失/冲突的 sub_trips 重新计算 start_time/end_time。",
-            args_schema=ItineraryAdjustTimesInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self._session = session
 
     def _run(self, **kwargs) -> dict:

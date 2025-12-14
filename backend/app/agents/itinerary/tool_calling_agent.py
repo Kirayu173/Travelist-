@@ -25,6 +25,7 @@ class ToolCallingMetrics:
     tool_calls: int = 0
     steps: int = 0
     llm_latency_ms: float = 0.0
+    llm_tokens_total: int = 0
 
 
 def _schema_for_tool(args_schema: Any) -> dict[str, Any]:
@@ -119,10 +120,11 @@ class ItineraryToolCallingAgent:
 
         tools_spec = _build_ollama_tools(registry)
         metrics = ToolCallingMetrics()
+        min_sub_trips = max(int(getattr(settings, "plan_deep_day_min_sub_trips", 3)), 1)
 
         system_prompt = (
             "你是 Travelist+ 行程规划器（工具调用模式）。\n"
-            "目标：为给定日期生成 3~5 个 sub_trips，时间不重叠，order_index 连续，从 0 开始。\n"
+            f"目标：为给定日期生成至少 {min_sub_trips} 个 sub_trips（建议 3~5 个），时间不重叠，order_index 连续，从 0 开始。\n"
             "约束：必须从 candidate_pois 里选择 POI，避免重复使用 POI（used_pois）。\n"
             "输出规则：不要直接输出行程 JSON；只能通过工具调用修改行程。\n"
             "流程建议：优先多次调用 itinerary_add_sub_trip，然后 itinerary_adjust_times，最后 itinerary_validate_day。\n"
@@ -161,6 +163,7 @@ class ItineraryToolCallingAgent:
             result = await self._ai_client.chat(request)
             metrics.llm_calls += 1
             metrics.llm_latency_ms = round(metrics.llm_latency_ms + result.latency_ms, 3)
+            metrics.llm_tokens_total += int(result.usage_tokens or 0)
 
             tool_calls = _extract_tool_calls(result)
             if tool_calls:
@@ -197,13 +200,18 @@ class ItineraryToolCallingAgent:
                     )
                 # Encourage validation after tool calls.
                 validation = validate_tool._run(day_index=session.day_index)
-                if validation.get("issue_count") == 0 and session.day_card.sub_trips:
+                if (
+                    validation.get("issue_count") == 0
+                    and len(session.day_card.sub_trips) >= min_sub_trips
+                ):
                     return session.day_card, {
                         "llm_calls": metrics.llm_calls,
                         "tool_calls": metrics.tool_calls,
                         "steps": metrics.steps,
                         "llm_latency_ms": metrics.llm_latency_ms,
+                        "llm_tokens_total": metrics.llm_tokens_total,
                     }
+                remaining = max(min_sub_trips - len(session.day_card.sub_trips), 0)
                 messages.append(
                     AiMessage(
                         role="user",
@@ -211,6 +219,7 @@ class ItineraryToolCallingAgent:
                             "当前 day_card 校验未通过，请优先调用 itinerary_adjust_times / "
                             "itinerary_replace_poi 进行修复，并在最后调用 itinerary_validate_day。"
                             f"\nissues={json_dumps(validation)}"
+                            + (f"\n还需要再添加 {remaining} 个 sub_trips。" if remaining else "")
                         ),
                     )
                 )
@@ -218,19 +227,25 @@ class ItineraryToolCallingAgent:
 
             # No tool calls: either model thinks it's done or it's off-rails.
             validation = validate_tool._run(day_index=session.day_index)
-            if validation.get("issue_count") == 0 and session.day_card.sub_trips:
+            if (
+                validation.get("issue_count") == 0
+                and len(session.day_card.sub_trips) >= min_sub_trips
+            ):
                 return session.day_card, {
                     "llm_calls": metrics.llm_calls,
                     "tool_calls": metrics.tool_calls,
                     "steps": metrics.steps,
                     "llm_latency_ms": metrics.llm_latency_ms,
+                    "llm_tokens_total": metrics.llm_tokens_total,
                 }
+            remaining = max(min_sub_trips - len(session.day_card.sub_trips), 0)
             messages.append(
                 AiMessage(
                     role="user",
                     content=(
-                        "请继续使用工具完成规划：先添加 sub_trips，再修复时间与重复 POI。"
+                        "请继续使用工具完成规划：先添加 sub_trips，再修复时间与重复 POI，最后校验。"
                         f"\nissues={json_dumps(validation)}"
+                        + (f"\n还需要再添加 {remaining} 个 sub_trips。" if remaining else "")
                     ),
                 )
             )

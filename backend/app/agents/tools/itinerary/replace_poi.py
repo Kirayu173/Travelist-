@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from app.agents.tools.itinerary.session import ItinerarySession, activity_title
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field
 from pydantic.v1 import PrivateAttr
 
@@ -17,22 +17,17 @@ class ItineraryReplacePoiInput(BaseModel):
     poi_provider_id: str = Field(..., min_length=1)
 
 
-class ItineraryReplacePoiTool(StructuredTool):
+class ItineraryReplacePoiTool(TravelistBaseTool):
     """替换指定 sub_trip 的 POI（用于修复重复/不符合偏好/距离过远）。"""
+
+    name: str = "itinerary_replace_poi"
+    description: str = "替换某个 sub_trip 的 POI（保持时间与 order_index 不变）。"
+    args_schema: type[BaseModel] = ItineraryReplacePoiInput
 
     _session: ItinerarySession = PrivateAttr()
 
     def __init__(self, session: ItinerarySession, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="itinerary_replace_poi",
-            description="替换某个 sub_trip 的 POI（保持时间与 order_index 不变）。",
-            args_schema=ItineraryReplacePoiInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self._session = session
 
     def _run(self, **kwargs) -> dict:

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import contextlib
+import datetime as dt
 import json
 from typing import Any
 
 from app.agents.assistant.state import AssistantState
 from app.agents.assistant.tool_selection import ToolSelector
+from app.agents.assistant.weather_query import WeatherQuerySpec, build_weather_query_spec
 from app.agents.tool_agent import AgentContext, ToolAgentRunner
 from app.agents.tools.registry import ToolRegistry
 from app.ai import AiChatRequest, AiClient, AiMessage
@@ -196,10 +198,19 @@ class AssistantNodes:
             "node.enter.tool_agent",
             extra={"query": state.query, "session_id": state.session_id},
         )
+        weather_spec = self._build_weather_query_spec(state.query)
+        if self._should_run_weather_direct(state.query, weather_spec):
+            return await self._run_weather_direct(state, weather_spec)
         if not self._tool_agent:
             return await self._fallback_direct_tool_run(state)
         try:
-            messages = [{"role": "user", "content": state.query}]
+            messages = [
+                {
+                    "role": "system",
+                    "content": self._render_time_anchor_message(),
+                },
+                {"role": "user", "content": state.query},
+            ]
             context = AgentContext(
                 user_id=str(state.user_id),
                 session_id=str(state.session_id or state.user_id),
@@ -256,6 +267,180 @@ class AssistantNodes:
                 extra={"error": str(exc)},
             )
         return state
+
+    @staticmethod
+    def _now_shanghai() -> dt.datetime:
+        try:
+            from zoneinfo import ZoneInfo
+
+            return dt.datetime.now(ZoneInfo("Asia/Shanghai"))
+        except Exception:  # pragma: no cover - fallback
+            return dt.datetime.now()
+
+    def _render_time_anchor_message(self) -> str:
+        now = self._now_shanghai()
+        return (
+            f"当前时间: {now.isoformat()} (Asia/Shanghai)。"
+            "当用户使用“今天/明天/后天/大后天”等相对日期词时，必须以此时间为基准理解。"
+        )
+
+    def _build_weather_query_spec(self, query: str) -> WeatherQuerySpec:
+        base_date = self._now_shanghai().date()
+        return build_weather_query_spec(query, base_date=base_date)
+
+    @staticmethod
+    def _looks_like_weather_query(query: str) -> bool:
+        lowered = (query or "").lower()
+        keywords = ["天气", "weather", "气温", "温度", "下雨", "降雨", "风力", "风向"]
+        return any(word in lowered for word in keywords)
+
+    @staticmethod
+    def _should_run_weather_direct(query: str, spec: WeatherQuerySpec) -> bool:
+        if not AssistantNodes._looks_like_weather_query(query):
+            return False
+        if spec.day_offset is not None:
+            return True
+        if spec.target_date is not None:
+            return True
+        return False
+
+    async def _run_weather_direct(
+        self, state: AssistantState, spec: WeatherQuerySpec
+    ) -> AssistantState:
+        tool = self._tool_registry.get("area_weather")
+        if not tool:
+            state.tool_error = "tool_not_registered"
+            return state
+
+        base_date = self._now_shanghai().date()
+        target_date = spec.target_date
+        offset = spec.day_offset
+        if target_date is not None and offset is None:
+            offset = (target_date - base_date).days
+        if offset is None:
+            offset = 0
+        if target_date is None:
+            target_date = base_date + dt.timedelta(days=offset)
+
+        if offset < 0:
+            state.selected_tool = "area_weather"
+            state.answer_text = f"你查询的日期（{target_date.isoformat()}）早于今天，无法提供预报。"
+            state.tool_traces.append(
+                {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+            )
+            return state
+        if offset > 3:
+            state.selected_tool = "area_weather"
+            state.answer_text = (
+                f"目前仅支持查询未来 4 天内的天气预报；你请求的是 {target_date.isoformat()}。"
+            )
+            state.tool_traces.append(
+                {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+            )
+            return state
+
+        locations = spec.locations or []
+        if not locations:
+            state.selected_tool = "area_weather"
+            state.answer_text = "想查询哪个城市/地区的天气？例如：明天广州天气怎么样。"
+            state.tool_traces.append(
+                {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+            )
+            return state
+
+        # Ensure the returned forecast list covers the requested offset (AMap includes today as index 0).
+        days = min(4, max(1, offset + 1))
+        payload = {"locations": locations[:1], "weather_type": "forecast", "days": days}
+        result = await tool.invoke(payload)
+        state.tool_result = result
+        state.selected_tool = "area_weather"
+        state.tool_args = payload
+        state.tool_traces.append(
+            {
+                "node": "tool_agent",
+                "status": "ok",
+                "tool": "area_weather",
+                "invoked_tools": ["area_weather"],
+                "mode": "direct",
+            }
+        )
+        state.tool_traces.append({"node": "tool_execute", "status": "ok", "tool": "area_weather"})
+
+        answer = self._format_area_weather_forecast_answer(
+            locations[0], target_date=target_date, day_offset=offset, tool_result=result
+        )
+        state.answer_text = answer
+        return state
+
+    @staticmethod
+    def _format_area_weather_forecast_answer(
+        location: str,
+        *,
+        target_date: dt.date,
+        day_offset: int,
+        tool_result: Any,
+    ) -> str:
+        day_label = {0: "今天", 1: "明天", 2: "后天", 3: "大后天"}.get(day_offset, "当天")
+        date_text = target_date.isoformat()
+
+        first = None
+        if isinstance(tool_result, dict):
+            results = tool_result.get("results")
+            if isinstance(results, list) and results:
+                first = results[0]
+        if not isinstance(first, dict):
+            return f"{location}{day_label}（{date_text}）的天气预报暂不可用。"
+
+        forecast = first.get("forecast")
+        cast = None
+        if isinstance(forecast, list) and forecast:
+            if 0 <= day_offset < len(forecast):
+                cast = forecast[day_offset]
+            else:
+                cast = forecast[0]
+        if not isinstance(cast, dict):
+            return f"{location}{day_label}（{date_text}）的天气预报暂不可用。"
+
+        # Prefer AMap forecast keys.
+        cast_date = cast.get("date")
+        if isinstance(cast_date, str) and cast_date.strip():
+            date_text = cast_date.strip()
+
+        day_weather = cast.get("dayweather") or cast.get("day_weather")
+        night_weather = cast.get("nightweather") or cast.get("night_weather")
+        high = cast.get("daytemp") or cast.get("high_c") or cast.get("high")
+        low = cast.get("nighttemp") or cast.get("low_c") or cast.get("low")
+        day_wind = cast.get("daywind") or cast.get("winddirection") or cast.get("wind")
+        day_power = cast.get("daypower") or cast.get("windpower")
+
+        weather_line = None
+        if day_weather or night_weather:
+            if day_weather and night_weather:
+                weather_line = f"天气情况：白天{day_weather}，夜间{night_weather}"
+            elif day_weather:
+                weather_line = f"天气情况：{day_weather}"
+            else:
+                weather_line = f"天气情况：{night_weather}"
+        else:
+            fallback_weather = first.get("weather")
+            if fallback_weather:
+                weather_line = f"天气情况：{fallback_weather}"
+
+        lines = [f"{location}{day_label}（{date_text}）的天气预报如下："]
+        if weather_line:
+            lines.append(weather_line)
+        if high is not None:
+            lines.append(f"最高气温：约 {high} °C")
+        if low is not None:
+            lines.append(f"最低气温：约 {low} °C")
+        if day_wind or day_power:
+            wind_text = "风向/风力："
+            if day_wind:
+                wind_text += str(day_wind)
+            if day_power:
+                wind_text += f" {day_power}"
+            lines.append(wind_text.strip())
+        return "\n".join(lines)
 
     async def _fallback_direct_tool_run(self, state: AssistantState) -> AssistantState:
         state.available_tools = self._tool_registry.names()
@@ -570,9 +755,17 @@ class AssistantNodes:
             args.setdefault("month", "当前或近期")
             args.setdefault("max_results", 3)
         elif tool_name == "area_weather":
-            args.setdefault("locations", [state.query])
+            spec = build_weather_query_spec(
+                state.query,
+                base_date=AssistantNodes._now_shanghai().date(),
+            )
+            args.setdefault("locations", spec.locations or [state.query])
             args.setdefault("weather_type", "forecast")
-            args.setdefault("days", 1)
+            if "days" not in args:
+                if spec.day_offset is None:
+                    args["days"] = 1
+                else:
+                    args["days"] = min(4, max(1, spec.day_offset + 1))
         elif tool_name == "path_navigate":
             if not args.get("routes"):
                 args["routes"] = [{"origin": "出发地", "destination": state.query}]

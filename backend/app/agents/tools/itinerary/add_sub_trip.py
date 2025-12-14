@@ -4,7 +4,7 @@ from datetime import time as dt_time
 from typing import Literal
 
 from app.agents.tools.itinerary.session import ItinerarySession, parse_hhmm
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field, field_validator
 from pydantic.v1 import PrivateAttr
 
@@ -37,22 +37,17 @@ class ItineraryAddSubTripInput(BaseModel):
         return text or None
 
 
-class ItineraryAddSubTripTool(StructuredTool):
+class ItineraryAddSubTripTool(TravelistBaseTool):
     """向指定 day_card 追加一个 sub_trip（按 slot 自动排时段，可指定 POI）。"""
+
+    name: str = "itinerary_add_sub_trip"
+    description: str = "给某一天添加一个 POI 子行程，并自动生成 order_index 与时间段。"
+    args_schema: type[BaseModel] = ItineraryAddSubTripInput
 
     _session: ItinerarySession = PrivateAttr()
 
     def __init__(self, session: ItinerarySession, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="itinerary_add_sub_trip",
-            description="给某一天添加一个 POI 子行程，并自动生成 order_index 与时间段。",
-            args_schema=ItineraryAddSubTripInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self._session = session
 
     def _run(self, **kwargs) -> dict:

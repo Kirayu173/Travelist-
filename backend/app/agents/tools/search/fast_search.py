@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
@@ -19,20 +19,12 @@ class FastSearchInput(BaseModel):
     max_results: int = Field(default=5, ge=1, le=10, description="最大返回条数")
 
 
-class FastSearchTool(StructuredTool):
+class FastSearchTool(TravelistBaseTool):
     """基于 Tavily 的快速事实搜索。"""
 
-    def __init__(self, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="fast_search",
-            description="快速事实搜索（Tavily），返回摘要与若干来源链接。",
-            args_schema=FastSearchInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+    name: str = "fast_search"
+    description: str = "快速事实搜索（Tavily），返回摘要与若干来源链接。"
+    args_schema: type[BaseModel] = FastSearchInput
 
     def _run(self, **kwargs) -> Dict[str, Any]:
         try:

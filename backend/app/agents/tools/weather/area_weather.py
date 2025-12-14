@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import datetime as dt
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
 from app.agents.tools.common.config_utils import get_key, load_env
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field, field_validator
 
 logger = get_tool_logger("area_weather")
@@ -40,21 +41,12 @@ class AreaWeatherInput(BaseModel):
         return value
 
 
-class AreaWeatherTool(StructuredTool):
+class AreaWeatherTool(TravelistBaseTool):
     """高德 API 天气查询，带本地 adcode 缓存、日志记录和错误兜底。"""
 
-    def __init__(self, **kwargs):
-        self._ensure_initialized()
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="area_weather",
-            description="查询多地点天气（支持实时/预报），优先使用本地缓存的行政区编码，缺失时自动查询。",
-            args_schema=AreaWeatherInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+    name: str = "area_weather"
+    description: str = "查询多地点天气（支持实时/预报），优先使用本地缓存的行政区编码，缺失时自动查询。"
+    args_schema: type[BaseModel] = AreaWeatherInput
 
     @staticmethod
     def _ensure_initialized() -> None:
@@ -110,6 +102,7 @@ class AreaWeatherTool(StructuredTool):
         return cache
 
     def _run(self, **kwargs) -> Dict[str, Any]:
+        self._ensure_initialized()
         try:
             payload = AreaWeatherInput(**kwargs)
         except Exception as exc:
@@ -149,15 +142,30 @@ class AreaWeatherTool(StructuredTool):
                     "status": "estimated",
                 }
                 if payload.weather_type == "forecast":
+                    try:
+                        from zoneinfo import ZoneInfo
+
+                        base_date = dt.datetime.now(ZoneInfo("Asia/Shanghai")).date()
+                    except Exception:  # pragma: no cover - fallback
+                        base_date = dt.date.today()
                     temp_series = [fallback["temperature_c"]] * payload.days
-                    fallback["forecast"] = [
-                        {
-                            "day_offset": idx + 1,
-                            "high_c": temp + 2,
-                            "low_c": temp - 3,
-                        }
-                        for idx, temp in enumerate(temp_series)
-                    ]
+                    fallback["forecast"] = []
+                    for idx, value in enumerate(temp_series):
+                        date = base_date + dt.timedelta(days=idx)
+                        fallback["forecast"].append(
+                            {
+                                "date": date.isoformat(),
+                                "week": str(date.isoweekday()),
+                                "dayweather": fallback["weather"],
+                                "nightweather": fallback["weather"],
+                                "daytemp": str(value + 2),
+                                "nighttemp": str(value - 3),
+                                "daywind": "未知",
+                                "nightwind": "未知",
+                                "daypower": "未知",
+                                "nightpower": "未知",
+                            }
+                        )
                 results.append(fallback)
 
         summary = {

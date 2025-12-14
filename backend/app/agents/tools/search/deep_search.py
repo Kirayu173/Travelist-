@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
@@ -22,22 +22,12 @@ class DeepSearchInput(BaseModel):
     )
 
 
-class DeepSearchTool(StructuredTool):
+class DeepSearchTool(TravelistBaseTool):
     """基于 Tavily 的行程搜索（酒店/交通/活动）。"""
 
-    def __init__(self, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="deep_search",
-            description=(
-                "生成酒店、交通、活动的候选信息（Tavily 实时搜索），" "用于行程规划。"
-            ),
-            args_schema=DeepSearchInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+    name: str = "deep_search"
+    description: str = "生成酒店、交通、活动的候选信息（Tavily 实时搜索），用于行程规划。"
+    args_schema: type[BaseModel] = DeepSearchInput
 
     def _run(self, **kwargs) -> Dict[str, Any]:
         try:

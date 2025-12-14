@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
@@ -17,26 +17,12 @@ class WeatherSearchInput(BaseModel):
     max_results: Optional[int] = Field(default=5, ge=1, le=10)
 
 
-class WeatherSearchTool(StructuredTool):
+class WeatherSearchTool(TravelistBaseTool):
     """基于 Tavily 的天气查询，返回摘要与引用链接。"""
 
-    def __init__(self, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="weather_search",
-            description="使用 Tavily 搜索指定地点和月份的天气摘要，返回引用链接。",
-            args_schema=WeatherSearchInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
-        # Validate Tavily API key on init
-        try:
-            TavilySearch()
-        except Exception:
-            # defer key errors to runtime
-            pass
+    name: str = "weather_search"
+    description: str = "使用 Tavily 搜索指定地点和月份的天气摘要，返回引用链接。"
+    args_schema: type[BaseModel] = WeatherSearchInput
 
     def _build_query(self, destination: str, month: str) -> str:
         return (

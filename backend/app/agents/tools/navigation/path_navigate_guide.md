@@ -36,7 +36,7 @@ AMAP_API_KEY=your_api_key_here
 
 ## 3. 工具结构
 
-PathNavigate 工具使用 StructuredTool 框架，主要组件包括：
+PathNavigate 工具使用 BaseTool 框架（pydantic v2），主要组件包括：
 
 - `PathNavigateInput`：输入参数模型，定义了工具接受的参数格式
 - `PathNavigateTool`：核心工具类，实现路径规划功能

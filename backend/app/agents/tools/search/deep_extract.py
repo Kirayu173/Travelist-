@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 import requests
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field, field_validator
 
 logger = get_tool_logger("deep_extract")
@@ -27,22 +27,12 @@ class DeepExtractInput(BaseModel):
         return value
 
 
-class DeepExtractTool(StructuredTool):
+class DeepExtractTool(TravelistBaseTool):
     """抓取并摘要指定 URLs 的内容（直接 HTTP 请求 + 简易清洗）。"""
 
-    def __init__(self, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="deep_extract",
-            description=(
-                "从多个 URL 提取关键信息的结构化结果（本地模拟），" "用于快速摘要。"
-            ),
-            args_schema=DeepExtractInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+    name: str = "deep_extract"
+    description: str = "从多个 URL 提取关键信息的结构化结果（本地模拟），用于快速摘要。"
+    args_schema: type[BaseModel] = DeepExtractInput
 
     def _run(self, **kwargs) -> Dict[str, Any]:
         try:

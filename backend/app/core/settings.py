@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     plan_deep_day_max_tokens: int = Field(
         default=900, validation_alias="PLAN_DEEP_DAY_MAX_TOKENS"
     )
+    plan_deep_day_min_sub_trips: int = Field(
+        default=3, validation_alias="PLAN_DEEP_DAY_MIN_SUB_TRIPS"
+    )
     plan_deep_context_max_days: int = Field(
         default=3, validation_alias="PLAN_DEEP_CONTEXT_MAX_DAYS"
     )

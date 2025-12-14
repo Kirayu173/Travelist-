@@ -60,5 +60,5 @@ def test_itinerary_tools_keep_session_private_attr() -> None:
     validate_tool = ItineraryValidateDayTool(session)
     report = validate_tool._run(day_index=0)
     assert report["ok"] is True
-    assert report["issue_count"] == 0
-
+    assert report["issue_count"] >= 1
+    assert any(issue.get("code") == "too_few_sub_trips" for issue in report["issues"])

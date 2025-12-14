@@ -117,10 +117,10 @@ class ToolRegistry:
     @staticmethod
     def _build_runner(tool_obj: Any, name: str) -> Runner:
         async def _runner(payload: dict[str, Any]) -> Any:
-            if hasattr(tool_obj, "_arun"):
-                return await tool_obj._arun(**payload)
             if hasattr(tool_obj, "ainvoke"):
                 return await tool_obj.ainvoke(payload)
+            if hasattr(tool_obj, "_arun"):
+                return await tool_obj._arun(**payload)
             if hasattr(tool_obj, "_run"):
                 return await asyncio.to_thread(tool_obj._run, **payload)
             if callable(tool_obj):

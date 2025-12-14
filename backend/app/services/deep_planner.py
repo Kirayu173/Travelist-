@@ -502,7 +502,7 @@ class DeepPlanner:
                         "steps": llm_result.get("steps"),
                     },
                 )
-                call_metrics["llm_calls"] += int(llm_result.get("llm_calls") or 1)
+                call_metrics["llm_calls"] += int(llm_result.get("llm_calls") or 0)
                 call_metrics["llm_latency_ms"] = round(
                     float(call_metrics["llm_latency_ms"])
                     + float(llm_result.get("latency_ms") or 0.0),
@@ -578,13 +578,13 @@ class DeepPlanner:
         trimmed_pois = candidate_pois[:max_pois]
 
         prev_used = set(used_pois)
-        working_used = set(used_pois)
+        session_used = set(used_pois)
         session = ItinerarySession(
             request=request,
             day_index=day_index,
             date=date,
             candidate_pois=trimmed_pois,
-            used_pois=working_used,
+            used_pois=session_used,
         )
         agent = ItineraryToolCallingAgent()
         try:
@@ -599,9 +599,6 @@ class DeepPlanner:
             raise
         except Exception as exc:  # noqa: BLE001
             raise DeepPlannerError(str(exc)[:200]) from exc
-        used_pois.clear()
-        used_pois.update(working_used)
-
         provider_name = str(
             getattr(settings, "ai_provider", None)
             or getattr(settings, "llm_provider", None)
@@ -614,7 +611,7 @@ class DeepPlanner:
         ).strip()
         llm_metrics = {
             "latency_ms": float(tool_metrics.get("llm_latency_ms") or 0.0),
-            "tokens_total": 0,
+            "tokens_total": int(tool_metrics.get("llm_tokens_total") or 0),
             "provider": provider_name,
             "model": model_name,
             "llm_calls": int(tool_metrics.get("llm_calls") or 0),

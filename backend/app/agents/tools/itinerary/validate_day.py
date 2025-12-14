@@ -4,7 +4,8 @@ from datetime import time as dt_time
 from typing import Any
 
 from app.agents.tools.itinerary.session import ItinerarySession
-from langchain_core.tools.structured import StructuredTool
+from app.agents.tools.common.base import TravelistBaseTool
+from app.core.settings import settings
 from pydantic import BaseModel, Field
 from pydantic.v1 import PrivateAttr
 
@@ -17,22 +18,17 @@ def _to_minutes(t: dt_time) -> int:
     return t.hour * 60 + t.minute
 
 
-class ItineraryValidateDayTool(StructuredTool):
+class ItineraryValidateDayTool(TravelistBaseTool):
     """校验当天 day_card 的基本一致性与 POI 去重约束。"""
+
+    name: str = "itinerary_validate_day"
+    description: str = "检查某天 day_card 是否满足 order_index 连续、时间不重叠、POI 不重复等约束。"
+    args_schema: type[BaseModel] = ItineraryValidateDayInput
 
     _session: ItinerarySession = PrivateAttr()
 
     def __init__(self, session: ItinerarySession, **kwargs):
-        super().__init__(
-            func=self._run,
-            coroutine=self._arun,
-            name="itinerary_validate_day",
-            description="检查某天 day_card 是否满足 order_index 连续、时间不重叠、POI 不重复等约束。",
-            args_schema=ItineraryValidateDayInput,
-            return_direct=False,
-            handle_tool_error=True,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self._session = session
 
     def _run(self, **kwargs) -> dict[str, Any]:
@@ -45,6 +41,16 @@ class ItineraryValidateDayTool(StructuredTool):
         if not card.sub_trips:
             issues.append({"code": "empty_day", "message": "sub_trips is empty"})
             return {"ok": True, "issues": issues, "issue_count": len(issues)}
+        min_required = max(int(getattr(settings, "plan_deep_day_min_sub_trips", 3)), 1)
+        if len(card.sub_trips) < min_required:
+            issues.append(
+                {
+                    "code": "too_few_sub_trips",
+                    "message": f"need at least {min_required} sub_trips",
+                    "min_required": min_required,
+                    "current": len(card.sub_trips),
+                }
+            )
 
         orders = [sub.order_index for sub in card.sub_trips if sub.order_index is not None]
         if len(orders) != len(card.sub_trips):
