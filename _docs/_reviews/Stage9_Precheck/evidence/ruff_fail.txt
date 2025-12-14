@@ -1,0 +1,812 @@
+﻿I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\assistant\nodes.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import contextlib
+ 4 | | import datetime as dt
+ 5 | | import json
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | from app.agents.assistant.state import AssistantState
+ 9 | | from app.agents.assistant.tool_selection import ToolSelector
+10 | | from app.agents.assistant.weather_query import WeatherQuerySpec, build_weather_query_spec
+11 | | from app.agents.tool_agent import AgentContext, ToolAgentRunner
+12 | | from app.agents.tools.registry import ToolRegistry
+13 | | from app.ai import AiChatRequest, AiClient, AiMessage
+14 | | from app.ai.memory_models import MemoryLevel
+15 | | from app.ai.prompts import PromptRegistry
+16 | | from app.core.logging import get_logger
+17 | | from app.core.settings import settings
+18 | | from app.services.memory_service import MemoryService
+19 | | from app.services.poi_service import PoiService, PoiServiceError
+20 | | from app.services.trip_service import TripQueryService
+   | |______________________________________________________^
+   |
+help: Organize imports
+
+E501 Line too long (89 > 88)
+  --> backend\app\agents\assistant\nodes.py:10:89
+   |
+ 8 | from app.agents.assistant.state import AssistantState
+ 9 | from app.agents.assistant.tool_selection import ToolSelector
+10 | from app.agents.assistant.weather_query import WeatherQuerySpec, build_weather_query_spec
+   |                                                                                         ^
+11 | from app.agents.tool_agent import AgentContext, ToolAgentRunner
+12 | from app.agents.tools.registry import ToolRegistry
+   |
+
+E501 Line too long (101 > 88)
+   --> backend\app\agents\assistant\nodes.py:214:89
+    |
+212 |                 messages.append({"role": "system", "content": history_block})
+213 |             if state.trip_data:
+214 |                 messages.append({"role": "system", "content": self._summarize_trip(state.trip_data)})
+    |                                                                                         ^^^^^^^^^^^^^
+215 |             if state.memories:
+216 |                 messages.append(
+    |
+
+E501 Line too long (106 > 88)
+   --> backend\app\agents\assistant\nodes.py:219:80
+    |
+217 |                     {
+218 |                         "role": "system",
+219 |                         "content": "鐩稿叧璁板繂锛坢em0 鍙洖锛夛細\n" + self._summarize_memories(state.memories),
+    |                                                                                         ^^^^^^^^^^^^^^^^^^
+220 |                     }
+221 |                 )
+    |
+
+E501 Line too long (100 > 88)
+   --> backend\app\agents\assistant\nodes.py:336:75
+    |
+334 |         if offset < 0:
+335 |             state.selected_tool = "area_weather"
+336 |             state.answer_text = f"浣犳煡璇㈢殑鏃ユ湡锛坽target_date.isoformat()}锛夋棭浜庝粖澶╋紝鏃犳硶鎻愪緵棰勬姤銆?
+    |                                                                                          ^^^^^^^^^^^
+337 |             state.tool_traces.append(
+338 |                 {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+    |
+
+E501 Line too long (96 > 88)
+   --> backend\app\agents\assistant\nodes.py:338:89
+    |
+336 |             state.answer_text = f"浣犳煡璇㈢殑鏃ユ湡锛坽target_date.isoformat()}锛夋棭浜庝粖澶╋紝鏃犳硶鎻愪緵棰勬姤銆?
+337 |             state.tool_traces.append(
+338 |                 {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+    |                                                                                         ^^^^^^^^
+339 |             )
+340 |             return state
+    |
+
+E501 Line too long (94 > 88)
+   --> backend\app\agents\assistant\nodes.py:344:67
+    |
+342 |             state.selected_tool = "area_weather"
+343 |             state.answer_text = (
+344 |                 f"鐩墠浠呮敮鎸佹煡璇㈡湭鏉?4 澶╁唴鐨勫ぉ姘旈鎶ワ紱浣犺姹傜殑鏄?{target_date.isoformat()}銆?
+    |                                                                                         ^^^^^^
+345 |             )
+346 |             state.tool_traces.append(
+    |
+
+E501 Line too long (96 > 88)
+   --> backend\app\agents\assistant\nodes.py:347:89
+    |
+345 |             )
+346 |             state.tool_traces.append(
+347 |                 {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+    |                                                                                         ^^^^^^^^
+348 |             )
+349 |             return state
+    |
+
+E501 Line too long (96 > 88)
+   --> backend\app\agents\assistant\nodes.py:356:89
+    |
+354 |             state.answer_text = "鎯虫煡璇㈠摢涓煄甯?鍦板尯鐨勫ぉ姘旓紵渚嬪锛氭槑澶╁箍宸炲ぉ姘旀€庝箞鏍枫€?
+355 |             state.tool_traces.append(
+356 |                 {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+    |                                                                                         ^^^^^^^^
+357 |             )
+358 |             return state
+    |
+
+E501 Line too long (105 > 88)
+   --> backend\app\agents\assistant\nodes.py:360:89
+    |
+358 |             return state
+359 |
+360 |         # Ensure the returned forecast list covers the requested offset (AMap includes today as index 0).
+    |                                                                                         ^^^^^^^^^^^^^^^^^
+361 |         days = min(4, max(1, offset + 1))
+362 |         payload = {"locations": locations[:1], "weather_type": "forecast", "days": days}
+    |
+
+E501 Line too long (98 > 88)
+   --> backend\app\agents\assistant\nodes.py:376:89
+    |
+374 |             }
+375 |         )
+376 |         state.tool_traces.append({"node": "tool_execute", "status": "ok", "tool": "area_weather"})
+    |                                                                                         ^^^^^^^^^^
+377 |
+378 |         answer = self._format_area_weather_forecast_answer(
+    |
+
+E501 Line too long (90 > 88)
+   --> backend\app\agents\assistant\nodes.py:392:78
+    |
+390 |         tool_result: Any,
+391 |     ) -> str:
+392 |         day_label = {0: "浠婂ぉ", 1: "鏄庡ぉ", 2: "鍚庡ぉ", 3: "澶у悗澶?}.get(day_offset, "褰撳ぉ")
+    |                                                                                         ^^
+393 |         date_text = target_date.isoformat()
+    |
+
+E501 Line too long (95 > 88)
+   --> backend\app\agents\assistant\nodes.py:510:89
+    |
+508 |         draft_answer: str | None = None
+509 |         # When tool_agent answers without calling tools (selected_tool="create_agent"),
+510 |         # do not skip: let the formatter incorporate memories/history for multi-turn coherence.
+    |                                                                                         ^^^^^^^
+511 |         if state.answer_text and state.selected_tool in (None, "create_agent"):
+512 |             draft_answer = state.answer_text
+    |
+
+E501 Line too long (109 > 88)
+  --> backend\app\agents\assistant\weather_query.py:19:89
+   |
+19 | def resolve_weather_date(query: str, *, base_date: dt.date) -> tuple[dt.date | None, int | None, str | None]:
+   |                                                                                         ^^^^^^^^^^^^^^^^^^^^^
+20 |     """
+21 |     Resolve target date for CN queries like 浠婂ぉ/鏄庡ぉ/鍚庡ぉ/澶у悗澶?or explicit YYYY-MM-DD.
+   |
+
+E501 Line too long (89 > 88)
+  --> backend\app\agents\assistant\weather_query.py:21:80
+   |
+19 | def resolve_weather_date(query: str, *, base_date: dt.date) -> tuple[dt.date | None, int | None, str | None]:
+20 |     """
+21 |     Resolve target date for CN queries like 浠婂ぉ/鏄庡ぉ/鍚庡ぉ/澶у悗澶?or explicit YYYY-MM-DD.
+   |                                                                                         ^
+22 |
+23 |     Returns (target_date, day_offset, day_label). Offsets are relative to base_date.
+   |
+
+E501 Line too long (90 > 88)
+  --> backend\app\agents\assistant\weather_query.py:31:89
+   |
+29 |     match = _DATE_RE.search(text)
+30 |     if match:
+31 |         year, month, day = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+   |                                                                                         ^^
+32 |         try:
+33 |             target = dt.date(year, month, day)
+   |
+
+E501 Line too long (97 > 88)
+  --> backend\app\agents\assistant\weather_query.py:91:75
+   |
+89 |         text,
+90 |     )
+91 |     text = re.sub(r"[\s锛?銆傦紟.锛燂紒?!锛?锛?锛堬級()銆愩€慭[\]鈥溾€漒"'<>銆娿€嬨€?\\-]+", " ", text).strip()
+   |                                                                                         ^^^^^^^^^
+92 |     if not text:
+93 |         return []
+   |
+
+E501 Line too long (89 > 88)
+   --> backend\app\agents\assistant\weather_query.py:101:89
+    |
+100 | def build_weather_query_spec(query: str, *, base_date: dt.date) -> WeatherQuerySpec:
+101 |     target_date, day_offset, day_label = resolve_weather_date(query, base_date=base_date)
+    |                                                                                         ^
+102 |     locations = extract_weather_locations(query)
+103 |     return WeatherQuerySpec(
+    |
+
+E501 Line too long (128 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:127:68
+    |
+125 | 鈥?    system_prompt = (
+126 | 鈥?        "浣犳槸 Travelist+ 琛岀▼瑙勫垝鍣紙宸ュ叿璋冪敤妯″紡锛夈€俓n"
+127 | 鈥?        f"鐩爣锛氫负缁欏畾鏃ユ湡鐢熸垚鑷冲皯 {min_sub_trips} 涓?sub_trips锛堝缓璁?3~5 涓級锛屾椂闂翠笉閲嶅彔锛宱rder_index 杩炵画锛屼粠 0 寮€濮嬨€俓n"
+    |                                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+128 | 鈥?        "绾︽潫锛氬繀椤讳粠 candidate_pois 閲岄€夋嫨 POI锛岄伩鍏嶉噸澶嶄娇鐢?POI锛坲sed_pois锛夈€俓n"
+129 | 鈥?        "杈撳嚭瑙勫垯锛氫笉瑕佺洿鎺ヨ緭鍑鸿绋?JSON锛涘彧鑳介€氳繃宸ュ叿璋冪敤淇敼琛岀▼銆俓n"
+    |
+
+E501 Line too long (121 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:130:75
+    |
+128 | 鈥?        "绾︽潫锛氬繀椤讳粠 candidate_pois 閲岄€夋嫨 POI锛岄伩鍏嶉噸澶嶄娇鐢?POI锛坲sed_pois锛夈€俓n"
+129 | 鈥?        "杈撳嚭瑙勫垯锛氫笉瑕佺洿鎺ヨ緭鍑鸿绋?JSON锛涘彧鑳介€氳繃宸ュ叿璋冪敤淇敼琛岀▼銆俓n"
+130 | 鈥?        "娴佺▼寤鸿锛氫紭鍏堝娆¤皟鐢?itinerary_add_sub_trip锛岀劧鍚?itinerary_adjust_times锛屾渶鍚?itinerary_validate_day銆俓n"
+    |                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+131 | 鈥?    )
+    |
+
+E501 Line too long (95 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:142:89
+    |
+140 |             "context": context,
+141 |             "candidate_pois": candidate_pois,
+142 |             "used_pois": [{"provider": p, "provider_id": pid} for p, pid in sorted(used_pois)],
+    |                                                                                         ^^^^^^^
+143 |         }
+    |
+
+F841 Local variable `t0` is assigned to but never used
+   --> backend\app\agents\itinerary\tool_calling_agent.py:153:13
+    |
+151 |         for step in range(max_steps):
+152 |             metrics.steps = step + 1
+153 |             t0 = perf_counter()
+    |             ^^
+154 |             request = AiChatRequest(
+155 |                 messages=messages,
+    |
+help: Remove assignment to unused variable `t0`
+
+E501 Line too long (90 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:158:89
+    |
+156 |                 response_format="text",
+157 |                 timeout_s=float(getattr(settings, "plan_deep_timeout_s", 30.0)),
+158 |                 model=str(getattr(settings, "plan_deep_model", "") or "").strip() or None,
+    |                                                                                         ^^
+159 |                 temperature=float(getattr(settings, "plan_deep_temperature", 0.2)),
+160 |                 max_tokens=int(getattr(settings, "plan_deep_max_tokens", 1200)),
+    |
+
+E501 Line too long (89 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:165:89
+    |
+163 |             result = await self._ai_client.chat(request)
+164 |             metrics.llm_calls += 1
+165 |             metrics.llm_latency_ms = round(metrics.llm_latency_ms + result.latency_ms, 3)
+    |                                                                                         ^
+166 |             metrics.llm_tokens_total += int(result.usage_tokens or 0)
+    |
+
+E501 Line too long (95 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:179:89
+    |
+177 |                 )
+178 |                 for idx, call in enumerate(tool_calls):
+179 |                     fn = call.get("function") if isinstance(call.get("function"), dict) else {}
+    |                                                                                         ^^^^^^^
+180 |                     name = str(fn.get("name") or "").strip()
+181 |                     args = _parse_tool_args(fn.get("arguments"))
+    |
+
+E501 Line too long (92 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:219:76
+    |
+217 |                         role="user",
+218 |                         content=(
+219 |                             "褰撳墠 day_card 鏍￠獙鏈€氳繃锛岃浼樺厛璋冪敤 itinerary_adjust_times / "
+    |                                                                                         ^^^^
+220 |                             "itinerary_replace_poi 杩涜淇锛屽苟鍦ㄦ渶鍚庤皟鐢?itinerary_validate_day銆?
+221 |                             f"\nissues={json_dumps(validation)}"
+    |
+
+E501 Line too long (99 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:220:78
+    |
+218 |                         content=(
+219 |                             "褰撳墠 day_card 鏍￠獙鏈€氳繃锛岃浼樺厛璋冪敤 itinerary_adjust_times / "
+220 |                             "itinerary_replace_poi 杩涜淇锛屽苟鍦ㄦ渶鍚庤皟鐢?itinerary_validate_day銆?
+    |                                                                                         ^^^^^^^^^^^
+221 |                             f"\nissues={json_dumps(validation)}"
+222 |                             + (f"\n杩橀渶瑕佸啀娣诲姞 {remaining} 涓?sub_trips銆? if remaining else "")
+    |
+
+E501 Line too long (97 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:222:81
+    |
+220 |                             "itinerary_replace_poi 杩涜淇锛屽苟鍦ㄦ渶鍚庤皟鐢?itinerary_validate_day銆?
+221 |                             f"\nissues={json_dumps(validation)}"
+222 |                             + (f"\n杩橀渶瑕佸啀娣诲姞 {remaining} 涓?sub_trips銆? if remaining else "")
+    |                                                                                         ^^^^^^^^^
+223 |                         ),
+224 |                     )
+    |
+
+E501 Line too long (100 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:246:65
+    |
+244 |                     role="user",
+245 |                     content=(
+246 |                         "璇风户缁娇鐢ㄥ伐鍏峰畬鎴愯鍒掞細鍏堟坊鍔?sub_trips锛屽啀淇鏃堕棿涓庨噸澶?POI锛屾渶鍚庢牎楠屻€?
+    |                                                                                          ^^^^^^^^^^^
+247 |                         f"\nissues={json_dumps(validation)}"
+248 |                         + (f"\n杩橀渶瑕佸啀娣诲姞 {remaining} 涓?sub_trips銆? if remaining else "")
+    |
+
+E501 Line too long (93 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:248:81
+    |
+246 |                         "璇风户缁娇鐢ㄥ伐鍏峰畬鎴愯鍒掞細鍏堟坊鍔?sub_trips锛屽啀淇鏃堕棿涓庨噸澶?POI锛屾渶鍚庢牎楠屻€?
+247 |                         f"\nissues={json_dumps(validation)}"
+248 |                         + (f"\n杩橀渶瑕佸啀娣诲姞 {remaining} 涓?sub_trips銆? if remaining else "")
+    |                                                                                         ^^^^^
+249 |                     ),
+250 |                 )
+    |
+
+E501 Line too long (100 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:262:89
+    |
+260 |     ):
+261 |         interests = []
+262 |         prefs = session.request.preferences if isinstance(session.request.preferences, dict) else {}
+    |                                                                                         ^^^^^^^^^^^^
+263 |         raw = prefs.get("interests")
+264 |         if isinstance(raw, list):
+    |
+
+E501 Line too long (89 > 88)
+   --> backend\app\agents\itinerary\tool_calling_agent.py:275:89
+    |
+273 |                 if poi.get("category") != cat:
+274 |                     continue
+275 |                 key = (str(poi.get("provider") or ""), str(poi.get("provider_id") or ""))
+    |                                                                                         ^
+276 |                 if key in session.used_pois:
+277 |                     continue
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\itinerary\add_sub_trip.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from datetime import time as dt_time
+ 4 | | from typing import Literal
+ 5 | |
+ 6 | | from app.agents.tools.itinerary.session import ItinerarySession, parse_hhmm
+ 7 | | from app.agents.tools.common.base import TravelistBaseTool
+ 8 | | from pydantic import BaseModel, Field, field_validator
+ 9 | | from pydantic.v1 import PrivateAttr
+   | |___________________________________^
+10 |
+11 |   Slot = Literal["morning", "afternoon", "evening"]
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\itinerary\adjust_times.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from datetime import time as dt_time
+ 4 | | from typing import Literal
+ 5 | |
+ 6 | | from app.agents.tools.itinerary.session import (
+ 7 | |     ItinerarySession,
+ 8 | |     add_minutes,
+ 9 | |     minutes_between,
+10 | |     parse_hhmm,
+11 | | )
+12 | | from app.agents.tools.common.base import TravelistBaseTool
+13 | | from pydantic import BaseModel, Field
+14 | | from pydantic.v1 import PrivateAttr
+   | |___________________________________^
+15 |
+16 |   Slot = Literal["morning", "afternoon", "evening"]
+   |
+help: Organize imports
+
+E501 Line too long (97 > 88)
+  --> backend\app\agents\tools\itinerary\adjust_times.py:39:70
+   |
+38 |     name: str = "itinerary_adjust_times"
+39 |     description: str = "淇鏌愪竴澶╂椂闂存锛氫负缂哄け/鍐茬獊鐨?sub_trips 閲嶆柊璁＄畻 start_time/end_time銆?
+   |                                                                                         ^^^^^^^^^
+40 |     args_schema: type[BaseModel] = ItineraryAdjustTimesInput
+   |
+
+E501 Line too long (89 > 88)
+  --> backend\app\agents\tools\itinerary\adjust_times.py:54:89
+   |
+53 |         sub_trips = list(self._session.day_card.sub_trips)
+54 |         sub_trips.sort(key=lambda s: (s.order_index if s.order_index is not None else 0))
+   |                                                                                         ^
+55 |
+56 |         if payload.policy == "slot":
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\itinerary\replace_poi.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from typing import Literal
+ 4 | |
+ 5 | | from app.agents.tools.itinerary.session import ItinerarySession, activity_title
+ 6 | | from app.agents.tools.common.base import TravelistBaseTool
+ 7 | | from pydantic import BaseModel, Field
+ 8 | | from pydantic.v1 import PrivateAttr
+   | |___________________________________^
+ 9 |
+10 |   Slot = Literal["morning", "afternoon", "evening"]
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+ --> backend\app\agents\tools\itinerary\session.py:1:1
+  |
+1 | / from __future__ import annotations
+2 | |
+3 | | from dataclasses import dataclass, field
+4 | | from datetime import date as dt_date
+5 | | from datetime import datetime, time as dt_time, timedelta
+6 | | from typing import Any
+7 | |
+8 | | from app.models.plan_schemas import PlanDayCardSchema, PlanRequest, PlanSubTripSchema
+  | |_____________________________________________________________________________________^
+  |
+help: Organize imports
+
+E501 Line too long (102 > 88)
+  --> backend\app\agents\tools\itinerary\session.py:70:89
+   |
+69 |     def next_order_index(self) -> int:
+70 |         existing = [sub.order_index for sub in self.day_card.sub_trips if sub.order_index is not None]
+   |                                                                                         ^^^^^^^^^^^^^^
+71 |         return (max(existing) + 1) if existing else 0
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\itinerary\validate_day.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from datetime import time as dt_time
+ 4 | | from typing import Any
+ 5 | |
+ 6 | | from app.agents.tools.itinerary.session import ItinerarySession
+ 7 | | from app.agents.tools.common.base import TravelistBaseTool
+ 8 | | from app.core.settings import settings
+ 9 | | from pydantic import BaseModel, Field
+10 | | from pydantic.v1 import PrivateAttr
+   | |___________________________________^
+   |
+help: Organize imports
+
+E501 Line too long (100 > 88)
+  --> backend\app\agents\tools\itinerary\validate_day.py:25:71
+   |
+24 |     name: str = "itinerary_validate_day"
+25 |     description: str = "妫€鏌ユ煇澶?day_card 鏄惁婊¤冻 order_index 杩炵画銆佹椂闂翠笉閲嶅彔銆丳OI 涓嶉噸澶嶇瓑绾︽潫銆?
+   |                                                                                          ^^^^^^^^^^^
+26 |     args_schema: type[BaseModel] = ItineraryValidateDayInput
+   |
+
+E501 Line too long (91 > 88)
+  --> backend\app\agents\tools\itinerary\validate_day.py:55:89
+   |
+53 |             )
+54 |
+55 |         orders = [sub.order_index for sub in card.sub_trips if sub.order_index is not None]
+   |                                                                                         ^^^
+56 |         if len(orders) != len(card.sub_trips):
+57 |             issues.append({"code": "missing_order", "message": "some order_index missing"})
+   |
+
+E501 Line too long (91 > 88)
+  --> backend\app\agents\tools\itinerary\validate_day.py:57:89
+   |
+55 |         orders = [sub.order_index for sub in card.sub_trips if sub.order_index is not None]
+56 |         if len(orders) != len(card.sub_trips):
+57 |             issues.append({"code": "missing_order", "message": "some order_index missing"})
+   |                                                                                         ^^^
+58 |         else:
+59 |             if len(set(orders)) != len(orders):
+   |
+
+E501 Line too long (94 > 88)
+  --> backend\app\agents\tools\itinerary\validate_day.py:60:89
+   |
+58 |         else:
+59 |             if len(set(orders)) != len(orders):
+60 |                 issues.append({"code": "duplicate_order", "message": "duplicate order_index"})
+   |                                                                                         ^^^^^^
+61 |             else:
+62 |                 expected = list(range(min(orders), min(orders) + len(orders)))
+   |
+
+E501 Line too long (100 > 88)
+  --> backend\app\agents\tools\itinerary\validate_day.py:80:89
+   |
+78 |                     {
+79 |                         "code": "missing_time",
+80 |                         "message": f"missing start_time/end_time for order_index={sub.order_index}",
+   |                                                                                         ^^^^^^^^^^^^
+81 |                     }
+82 |                 )
+   |
+
+E501 Line too long (101 > 88)
+   --> backend\app\agents\tools\itinerary\validate_day.py:105:89
+    |
+103 |             ext = sub.ext if isinstance(sub.ext, dict) else {}
+104 |             poi = ext.get("poi") if isinstance(ext.get("poi"), dict) else {}
+105 |             key = (str(poi.get("provider") or "").strip(), str(poi.get("provider_id") or "").strip())
+    |                                                                                         ^^^^^^^^^^^^^
+106 |             if not all(key):
+107 |                 continue
+    |
+
+E501 Line too long (116 > 88)
+   --> backend\app\agents\tools\itinerary\validate_day.py:109:89
+    |
+107 |                 continue
+108 |             if key in seen:
+109 |                 issues.append({"code": "duplicate_poi_day", "message": f"poi duplicated in day: {key[0]}/{key[1]}"})
+    |                                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+110 |             seen.add(key)
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\navigation\path_navigate.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import os
+ 4 | | from pathlib import Path
+ 5 | | from typing import Any, Dict, List, Literal, Optional
+ 6 | |
+ 7 | | import requests
+ 8 | | from app.agents.tools.common.logging import get_tool_logger, log_tool_event
+ 9 | | from dotenv import load_dotenv
+10 | | from app.agents.tools.common.base import TravelistBaseTool
+11 | | from pydantic import BaseModel, Field, field_validator
+   | |______________________________________________________^
+12 |
+13 |   logger = get_tool_logger("path_navigate")
+   |
+help: Organize imports
+
+E501 Line too long (97 > 88)
+  --> backend\app\agents\tools\navigation\path_navigate.py:50:57
+   |
+49 |     name: str = "path_navigate"
+50 |     description: str = "瑙勫垝澶氭潯璺嚎鐨勭矖鐣ヨ窛绂讳笌鏃堕暱璇勪及锛堟湰鍦颁及绠楋紝缂哄皯鐪熷疄璺喌鏃惰繑鍥炶繎浼煎€硷級銆?
+   |                                                                                         ^^^^^^^^^
+51 |     args_schema: type[BaseModel] = PathNavigateInput
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\search\deep_extract.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import re
+ 4 | | from typing import Any, Dict, List
+ 5 | |
+ 6 | | import requests
+ 7 | | from app.agents.tools.common.logging import get_tool_logger, log_tool_event
+ 8 | | from app.agents.tools.common.base import TravelistBaseTool
+ 9 | | from pydantic import BaseModel, Field, field_validator
+   | |______________________________________________________^
+10 |
+11 |   logger = get_tool_logger("deep_extract")
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\search\deep_search.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from typing import Any, Dict, List
+ 4 | |
+ 5 | | from app.agents.tools.common.logging import get_tool_logger, log_tool_event
+ 6 | | from app.agents.tools.common.base import TravelistBaseTool
+ 7 | | from langchain_tavily import TavilySearch
+ 8 | | from pydantic import BaseModel, Field
+   | |_____________________________________^
+ 9 |
+10 |   logger = get_tool_logger("deep_search")
+   |
+help: Organize imports
+
+E501 Line too long (90 > 88)
+  --> backend\app\agents\tools\search\deep_search.py:29:61
+   |
+28 |     name: str = "deep_search"
+29 |     description: str = "鐢熸垚閰掑簵銆佷氦閫氥€佹椿鍔ㄧ殑鍊欓€変俊鎭紙Tavily 瀹炴椂鎼滅储锛夛紝鐢ㄤ簬琛岀▼瑙勫垝銆?
+   |                                                                                          ^
+30 |     args_schema: type[BaseModel] = DeepSearchInput
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\search\fast_search.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from typing import Any, Dict
+ 4 | |
+ 5 | | from app.agents.tools.common.logging import get_tool_logger, log_tool_event
+ 6 | | from app.agents.tools.common.base import TravelistBaseTool
+ 7 | | from langchain_tavily import TavilySearch
+ 8 | | from pydantic import BaseModel, Field
+   | |_____________________________________^
+ 9 |
+10 |   logger = get_tool_logger("fast_search")
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\system\current_time.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import datetime as _dt
+ 4 | | from typing import Any, Dict, Optional
+ 5 | |
+ 6 | | from app.agents.tools.common.logging import get_tool_logger, log_tool_event
+ 7 | | from app.agents.tools.common.base import TravelistBaseTool
+ 8 | | from pydantic import BaseModel, Field
+   | |_____________________________________^
+ 9 |
+10 |   logger = get_tool_logger("current_time")
+   |
+help: Organize imports
+
+E501 Line too long (96 > 88)
+  --> backend\app\agents\tools\system\current_time.py:28:59
+   |
+27 |     name: str = "current_time"
+28 |     description: str = "鑾峰彇褰撳墠鏃堕棿鎴栨寚瀹氭椂鍖烘椂闂达紝杩斿洖缁撴瀯鍖栧瓧娈碉紙ISO銆佹椂闂存埑銆佹棩鏈熺粍鎴愮瓑锛夈€?
+   |                                                                                          ^^^^^^^
+29 |     args_schema: type[BaseModel] = CurrentTimeInput
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\weather\area_weather.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import json
+ 4 | | import datetime as dt
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any, Dict, List, Optional
+ 7 | |
+ 8 | | import requests
+ 9 | | from app.agents.tools.common.config_utils import get_key, load_env
+10 | | from app.agents.tools.common.logging import get_tool_logger, log_tool_event
+11 | | from app.agents.tools.common.base import TravelistBaseTool
+12 | | from pydantic import BaseModel, Field, field_validator
+   | |______________________________________________________^
+13 |
+14 |   logger = get_tool_logger("area_weather")
+   |
+help: Organize imports
+
+E501 Line too long (104 > 88)
+  --> backend\app\agents\tools\weather\area_weather.py:48:58
+   |
+47 |     name: str = "area_weather"
+48 |     description: str = "鏌ヨ澶氬湴鐐瑰ぉ姘旓紙鏀寔瀹炴椂/棰勬姤锛夛紝浼樺厛浣跨敤鏈湴缂撳瓨鐨勮鏀垮尯缂栫爜锛岀己澶辨椂鑷姩鏌ヨ銆?
+   |                                                                                          ^^^^^^^^^^^^^^^
+49 |     args_schema: type[BaseModel] = AreaWeatherInput
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\app\agents\tools\weather\weather_search.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import asyncio
+ 4 | | from typing import Any, Dict, List, Optional
+ 5 | |
+ 6 | | from app.agents.tools.common.logging import get_tool_logger, log_tool_event
+ 7 | | from app.agents.tools.common.base import TravelistBaseTool
+ 8 | | from langchain_tavily import TavilySearch
+ 9 | | from pydantic import BaseModel, Field
+   | |_____________________________________^
+10 |
+11 |   logger = get_tool_logger("weather_search")
+   |
+help: Organize imports
+
+E501 Line too long (93 > 88)
+   --> backend\app\ai\client.py:120:89
+    |
+118 |             if not has_tool_result:
+119 |                 first = request.tools[0] if request.tools else None
+120 |                 fn = ((first or {}).get("function") or {}) if isinstance(first, dict) else {}
+    |                                                                                         ^^^^^
+121 |                 tool_name = fn.get("name") or "unknown_tool"
+122 |                 raw = {
+    |
+
+E501 Line too long (90 > 88)
+   --> backend\app\ai\client.py:304:89
+    |
+302 |             "model": used_model,
+303 |             "messages": [
+304 |                 msg.model_dump(mode="json", exclude_none=True) for msg in request.messages
+    |                                                                                         ^^
+305 |             ],
+306 |             "stream": True,
+    |
+
+F401 [*] `app.utils.json_utils.json_dumps` imported but unused
+  --> backend\app\services\deep_planner.py:28:34
+   |
+26 | from app.services.memory_service import MemoryService, get_memory_service
+27 | from app.services.poi_service import PoiService, get_poi_service
+28 | from app.utils.json_utils import json_dumps
+   |                                  ^^^^^^^^^^
+29 | from pydantic import ValidationError
+   |
+help: Remove unused import: `app.utils.json_utils.json_dumps`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\tests\test_assistant_weather_relative_date.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import datetime as dt
+ 4 | |
+ 5 | | import pytest
+ 6 | |
+ 7 | | from app.agents import build_tool_registry
+ 8 | | from app.agents.assistant.graph import build_assistant_graph
+ 9 | | from app.agents.assistant.nodes import AssistantNodes
+10 | | from app.agents.assistant.state import AssistantState
+11 | | from app.agents.assistant.weather_query import build_weather_query_spec
+12 | | from app.ai.models import AiChatResult
+13 | | from app.ai.prompts import PromptRegistry
+   | |_________________________________________^
+   |
+help: Organize imports
+
+E501 Line too long (101 > 88)
+   --> backend\tests\test_assistant_weather_relative_date.py:98:89
+    |
+ 96 |         tool_registry=registry,
+ 97 |         poi_service=_StubPoiService(),
+ 98 |         tool_agent=None,  # force fallback path if any; direct weather still triggers before fallback
+    |                                                                                         ^^^^^^^^^^^^^
+ 99 |     )
+100 |     graph = build_assistant_graph(nodes)
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend\tests\test_response_formatter_memory_draft.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import pytest
+ 4 | |
+ 5 | | from app.agents import build_tool_registry
+ 6 | | from app.agents.assistant.nodes import AssistantNodes
+ 7 | | from app.agents.assistant.state import AssistantState
+ 8 | | from app.ai.models import AiChatResult
+ 9 | | from app.ai.memory_models import MemoryItem
+10 | | from app.ai.prompts import PromptRegistry
+   | |_________________________________________^
+   |
+help: Organize imports
+
+E501 Line too long (100 > 88)
+  --> backend\tests\test_response_formatter_memory_draft.py:79:64
+   |
+77 |             id="m1",
+78 |             score=0.67,
+79 |             text="Q: 鏄庡ぉ骞垮窞澶╂皵鎬庝箞鏍?A: 骞垮窞鏄庡ぉ锛?025-12-15锛夌殑澶╂皵棰勬姤濡備笅锛氭渶楂?9掳C锛屾渶浣?掳C",
+   |                                                                                         ^^^^^^^^^^^^
+80 |         )
+81 |     ]
+   |
+
+Found 65 errors.
+[*] 16 fixable with the `--fix` option (1 hidden fix can be enabled with the `--unsafe-fixes` option).

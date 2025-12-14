@@ -1,0 +1,19 @@
+﻿would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\itinerary\__init__.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\common\base.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\itinerary\__init__.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\utils\json_utils.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\assistant\weather_query.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\itinerary\adjust_times.py
+would reformat D:\Work\graduation_design\Travelist+\backend\tests\test_response_formatter_memory_draft.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\system\current_time.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\itinerary\validate_day.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\itinerary\session.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\search\deep_search.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\navigation\path_navigate.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\itinerary\tool_calling_agent.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\tools\weather\area_weather.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\ai\client.py
+would reformat D:\Work\graduation_design\Travelist+\backend\app\agents\assistant\nodes.py
+System.Management.Automation.RemoteException
+Oh no! \U0001f4a5 \U0001f494 \U0001f4a5
+16 files would be reformatted, 110 files would be left unchanged.
