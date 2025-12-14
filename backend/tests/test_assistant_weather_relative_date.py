@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime as dt
 
 import pytest
-
 from app.agents import build_tool_registry
 from app.agents.assistant.graph import build_assistant_graph
 from app.agents.assistant.nodes import AssistantNodes
@@ -87,6 +86,7 @@ async def test_assistant_graph_weather_direct_uses_tomorrow_date(monkeypatch):
 
     registry = build_tool_registry()
     ai_client = _StubAiClient(['{"intent": "general_qa"}'])
+    # Force fallback path if any; direct weather still triggers before fallback.
     nodes = AssistantNodes(
         ai_client=ai_client,
         memory_service=_StubMemoryService(),
@@ -95,7 +95,7 @@ async def test_assistant_graph_weather_direct_uses_tomorrow_date(monkeypatch):
         tool_selector=_StubSelector(),
         tool_registry=registry,
         poi_service=_StubPoiService(),
-        tool_agent=None,  # force fallback path if any; direct weather still triggers before fallback
+        tool_agent=None,
     )
     graph = build_assistant_graph(nodes)
     state = AssistantState(

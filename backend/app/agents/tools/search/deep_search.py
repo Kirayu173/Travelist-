@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from app.agents.tools.common.base import TravelistBaseTool
+from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
@@ -26,7 +26,9 @@ class DeepSearchTool(TravelistBaseTool):
     """基于 Tavily 的行程搜索（酒店/交通/活动）。"""
 
     name: str = "deep_search"
-    description: str = "生成酒店、交通、活动的候选信息（Tavily 实时搜索），用于行程规划。"
+    description: str = (
+        "生成酒店、交通、活动的候选信息（Tavily 实时搜索），用于行程规划。"
+    )
     args_schema: type[BaseModel] = DeepSearchInput
 
     def _run(self, **kwargs) -> Dict[str, Any]:

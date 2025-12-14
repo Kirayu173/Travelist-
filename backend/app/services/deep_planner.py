@@ -25,7 +25,6 @@ from app.services.fast_planner import FastPlanner
 from app.services.geocode_service import GeocodeService, get_geocode_service
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.poi_service import PoiService, get_poi_service
-from app.utils.json_utils import json_dumps
 from pydantic import ValidationError
 
 

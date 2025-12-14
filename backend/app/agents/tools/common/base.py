@@ -8,4 +8,3 @@ class TravelistBaseTool(BaseTool):
 
     return_direct: bool = False
     handle_tool_error: bool = True
-

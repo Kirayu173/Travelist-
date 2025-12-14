@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from app.agents.tools.itinerary.session import ItinerarySession, activity_title
 from app.agents.tools.common.base import TravelistBaseTool
+from app.agents.tools.itinerary.session import ItinerarySession, activity_title
 from pydantic import BaseModel, Field
 from pydantic.v1 import PrivateAttr
 

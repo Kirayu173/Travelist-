@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 import requests
+from app.agents.tools.common.base import TravelistBaseTool
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from dotenv import load_dotenv
-from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field, field_validator
 
 logger = get_tool_logger("path_navigate")
@@ -47,7 +47,9 @@ class PathNavigateTool(TravelistBaseTool):
     """Lightweight, offline-friendly route estimator."""
 
     name: str = "path_navigate"
-    description: str = "规划多条路线的粗略距离与时长评估（本地估算，缺少真实路况时返回近似值）。"
+    description: str = (
+        "规划多条路线的粗略距离与时长评估（本地估算，缺少真实路况时返回近似值）。"
+    )
     args_schema: type[BaseModel] = PathNavigateInput
 
     def _run(self, **kwargs) -> Dict[str, Any]:

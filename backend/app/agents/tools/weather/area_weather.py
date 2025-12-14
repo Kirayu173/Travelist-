@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import json
 import datetime as dt
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
+from app.agents.tools.common.base import TravelistBaseTool
 from app.agents.tools.common.config_utils import get_key, load_env
 from app.agents.tools.common.logging import get_tool_logger, log_tool_event
-from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field, field_validator
 
 logger = get_tool_logger("area_weather")
@@ -45,7 +45,9 @@ class AreaWeatherTool(TravelistBaseTool):
     """高德 API 天气查询，带本地 adcode 缓存、日志记录和错误兜底。"""
 
     name: str = "area_weather"
-    description: str = "查询多地点天气（支持实时/预报），优先使用本地缓存的行政区编码，缺失时自动查询。"
+    description: str = (
+        "查询多地点天气（支持实时/预报），优先使用本地缓存的行政区编码，缺失时自动查询。"
+    )
     args_schema: type[BaseModel] = AreaWeatherInput
 
     @staticmethod

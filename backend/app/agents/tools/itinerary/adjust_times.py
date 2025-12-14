@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import time as dt_time
 from typing import Literal
 
+from app.agents.tools.common.base import TravelistBaseTool
 from app.agents.tools.itinerary.session import (
     ItinerarySession,
     add_minutes,
     minutes_between,
     parse_hhmm,
 )
-from app.agents.tools.common.base import TravelistBaseTool
 from pydantic import BaseModel, Field
 from pydantic.v1 import PrivateAttr
 
@@ -36,7 +36,9 @@ class ItineraryAdjustTimesTool(TravelistBaseTool):
     """修复某天 sub_trips 的时间连续性（避免重叠/缺失）。"""
 
     name: str = "itinerary_adjust_times"
-    description: str = "修复某一天时间段：为缺失/冲突的 sub_trips 重新计算 start_time/end_time。"
+    description: str = (
+        "修复某一天时间段：为缺失/冲突的 sub_trips 重新计算 start_time/end_time。"
+    )
     args_schema: type[BaseModel] = ItineraryAdjustTimesInput
 
     _session: ItinerarySession = PrivateAttr()
@@ -51,7 +53,9 @@ class ItineraryAdjustTimesTool(TravelistBaseTool):
             return {"ok": False, "error": "day_index mismatch"}
 
         sub_trips = list(self._session.day_card.sub_trips)
-        sub_trips.sort(key=lambda s: (s.order_index if s.order_index is not None else 0))
+        sub_trips.sort(
+            key=lambda s: (s.order_index if s.order_index is not None else 0)
+        )
 
         if payload.policy == "slot":
             slot_order = {"morning": 0, "afternoon": 1, "evening": 2}

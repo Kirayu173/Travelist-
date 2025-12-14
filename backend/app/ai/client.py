@@ -117,7 +117,11 @@ class AiClient:
             has_tool_result = any(msg.role == "tool" for msg in request.messages)
             if not has_tool_result:
                 first = request.tools[0] if request.tools else None
-                fn = ((first or {}).get("function") or {}) if isinstance(first, dict) else {}
+                fn = (
+                    ((first or {}).get("function") or {})
+                    if isinstance(first, dict)
+                    else {}
+                )
                 tool_name = fn.get("name") or "unknown_tool"
                 raw = {
                     "message": {
@@ -301,7 +305,8 @@ class AiClient:
         payload: dict[str, Any] = {
             "model": used_model,
             "messages": [
-                msg.model_dump(mode="json", exclude_none=True) for msg in request.messages
+                msg.model_dump(mode="json", exclude_none=True)
+                for msg in request.messages
             ],
             "stream": True,
         }

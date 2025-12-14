@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import time as dt_time
 from typing import Literal
 
-from app.agents.tools.itinerary.session import ItinerarySession, parse_hhmm
 from app.agents.tools.common.base import TravelistBaseTool
+from app.agents.tools.itinerary.session import ItinerarySession, parse_hhmm
 from pydantic import BaseModel, Field, field_validator
 from pydantic.v1 import PrivateAttr
 

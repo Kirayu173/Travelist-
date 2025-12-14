@@ -29,4 +29,3 @@ def json_dumps(value: Any, **kwargs: Any) -> str:
     kwargs.setdefault("ensure_ascii", False)
     kwargs.setdefault("default", _json_default)
     return json.dumps(value, **kwargs)
-

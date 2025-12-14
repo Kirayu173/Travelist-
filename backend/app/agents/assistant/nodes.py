@@ -7,7 +7,10 @@ from typing import Any
 
 from app.agents.assistant.state import AssistantState
 from app.agents.assistant.tool_selection import ToolSelector
-from app.agents.assistant.weather_query import WeatherQuerySpec, build_weather_query_spec
+from app.agents.assistant.weather_query import (
+    WeatherQuerySpec,
+    build_weather_query_spec,
+)
 from app.agents.tool_agent import AgentContext, ToolAgentRunner
 from app.agents.tools.registry import ToolRegistry
 from app.ai import AiChatRequest, AiClient, AiMessage
@@ -211,12 +214,15 @@ class AssistantNodes:
             if history_block.strip():
                 messages.append({"role": "system", "content": history_block})
             if state.trip_data:
-                messages.append({"role": "system", "content": self._summarize_trip(state.trip_data)})
+                messages.append(
+                    {"role": "system", "content": self._summarize_trip(state.trip_data)}
+                )
             if state.memories:
                 messages.append(
                     {
                         "role": "system",
-                        "content": "相关记忆（mem0 召回）：\n" + self._summarize_memories(state.memories),
+                        "content": "相关记忆（mem0 召回）：\n"
+                        + self._summarize_memories(state.memories),
                     }
                 )
             messages.append({"role": "user", "content": state.query})
@@ -333,18 +339,31 @@ class AssistantNodes:
 
         if offset < 0:
             state.selected_tool = "area_weather"
-            state.answer_text = f"你查询的日期（{target_date.isoformat()}）早于今天，无法提供预报。"
+            state.answer_text = (
+                f"你查询的日期（{target_date.isoformat()}）早于今天，无法提供预报。"
+            )
             state.tool_traces.append(
-                {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+                {
+                    "node": "tool_agent",
+                    "status": "ok",
+                    "tool": "area_weather",
+                    "mode": "direct",
+                }
             )
             return state
         if offset > 3:
             state.selected_tool = "area_weather"
             state.answer_text = (
-                f"目前仅支持查询未来 4 天内的天气预报；你请求的是 {target_date.isoformat()}。"
+                "目前仅支持查询未来 4 天内的天气预报；你请求的是 "
+                f"{target_date.isoformat()}。"
             )
             state.tool_traces.append(
-                {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+                {
+                    "node": "tool_agent",
+                    "status": "ok",
+                    "tool": "area_weather",
+                    "mode": "direct",
+                }
             )
             return state
 
@@ -353,11 +372,17 @@ class AssistantNodes:
             state.selected_tool = "area_weather"
             state.answer_text = "想查询哪个城市/地区的天气？例如：明天广州天气怎么样。"
             state.tool_traces.append(
-                {"node": "tool_agent", "status": "ok", "tool": "area_weather", "mode": "direct"}
+                {
+                    "node": "tool_agent",
+                    "status": "ok",
+                    "tool": "area_weather",
+                    "mode": "direct",
+                }
             )
             return state
 
-        # Ensure the returned forecast list covers the requested offset (AMap includes today as index 0).
+        # Ensure the returned forecast list covers the requested offset.
+        # AMap includes today as index 0.
         days = min(4, max(1, offset + 1))
         payload = {"locations": locations[:1], "weather_type": "forecast", "days": days}
         result = await tool.invoke(payload)
@@ -373,7 +398,9 @@ class AssistantNodes:
                 "mode": "direct",
             }
         )
-        state.tool_traces.append({"node": "tool_execute", "status": "ok", "tool": "area_weather"})
+        state.tool_traces.append(
+            {"node": "tool_execute", "status": "ok", "tool": "area_weather"}
+        )
 
         answer = self._format_area_weather_forecast_answer(
             locations[0], target_date=target_date, day_offset=offset, tool_result=result
@@ -389,7 +416,9 @@ class AssistantNodes:
         day_offset: int,
         tool_result: Any,
     ) -> str:
-        day_label = {0: "今天", 1: "明天", 2: "后天", 3: "大后天"}.get(day_offset, "当天")
+        day_label = {0: "今天", 1: "明天", 2: "后天", 3: "大后天"}.get(
+            day_offset, "当天"
+        )
         date_text = target_date.isoformat()
 
         first = None
@@ -507,7 +536,8 @@ class AssistantNodes:
         )
         draft_answer: str | None = None
         # When tool_agent answers without calling tools (selected_tool="create_agent"),
-        # do not skip: let the formatter incorporate memories/history for multi-turn coherence.
+        # do not skip: let the formatter incorporate memories/history for
+        # multi-turn coherence.
         if state.answer_text and state.selected_tool in (None, "create_agent"):
             draft_answer = state.answer_text
             state.answer_text = None

@@ -3,8 +3,8 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Any, Dict, Optional
 
-from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from app.agents.tools.common.base import TravelistBaseTool
+from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from pydantic import BaseModel, Field
 
 logger = get_tool_logger("current_time")
@@ -25,7 +25,9 @@ class CurrentTimeTool(TravelistBaseTool):
     """Simple time utility that works offline."""
 
     name: str = "current_time"
-    description: str = "获取当前时间或指定时区时间，返回结构化字段（ISO、时间戳、日期组成等）。"
+    description: str = (
+        "获取当前时间或指定时区时间，返回结构化字段（ISO、时间戳、日期组成等）。"
+    )
     args_schema: type[BaseModel] = CurrentTimeInput
 
     def _run(self, **kwargs) -> Dict[str, Any]:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from time import perf_counter
 from typing import Any
 
 from app.agents.tools.itinerary import (
@@ -124,10 +123,12 @@ class ItineraryToolCallingAgent:
 
         system_prompt = (
             "你是 Travelist+ 行程规划器（工具调用模式）。\n"
-            f"目标：为给定日期生成至少 {min_sub_trips} 个 sub_trips（建议 3~5 个），时间不重叠，order_index 连续，从 0 开始。\n"
+            f"目标：为给定日期生成至少 {min_sub_trips} 个 sub_trips（建议 3~5 个），"
+            "时间不重叠，order_index 连续，从 0 开始。\n"
             "约束：必须从 candidate_pois 里选择 POI，避免重复使用 POI（used_pois）。\n"
             "输出规则：不要直接输出行程 JSON；只能通过工具调用修改行程。\n"
-            "流程建议：优先多次调用 itinerary_add_sub_trip，然后 itinerary_adjust_times，最后 itinerary_validate_day。\n"
+            "流程建议：优先多次调用 itinerary_add_sub_trip，然后 "
+            "itinerary_adjust_times，最后 itinerary_validate_day。\n"
         )
 
         user_payload = {
@@ -139,7 +140,9 @@ class ItineraryToolCallingAgent:
             "outline": outline,
             "context": context,
             "candidate_pois": candidate_pois,
-            "used_pois": [{"provider": p, "provider_id": pid} for p, pid in sorted(used_pois)],
+            "used_pois": [
+                {"provider": p, "provider_id": pid} for p, pid in sorted(used_pois)
+            ],
         }
 
         messages: list[AiMessage] = [
@@ -150,19 +153,21 @@ class ItineraryToolCallingAgent:
         max_steps = max(int(getattr(settings, "plan_deep_tool_max_steps", 18)), 6)
         for step in range(max_steps):
             metrics.steps = step + 1
-            t0 = perf_counter()
             request = AiChatRequest(
                 messages=messages,
                 response_format="text",
                 timeout_s=float(getattr(settings, "plan_deep_timeout_s", 30.0)),
-                model=str(getattr(settings, "plan_deep_model", "") or "").strip() or None,
+                model=str(getattr(settings, "plan_deep_model", "") or "").strip()
+                or None,
                 temperature=float(getattr(settings, "plan_deep_temperature", 0.2)),
                 max_tokens=int(getattr(settings, "plan_deep_max_tokens", 1200)),
                 tools=tools_spec,
             )
             result = await self._ai_client.chat(request)
             metrics.llm_calls += 1
-            metrics.llm_latency_ms = round(metrics.llm_latency_ms + result.latency_ms, 3)
+            metrics.llm_latency_ms = round(
+                metrics.llm_latency_ms + result.latency_ms, 3
+            )
             metrics.llm_tokens_total += int(result.usage_tokens or 0)
 
             tool_calls = _extract_tool_calls(result)
@@ -176,7 +181,11 @@ class ItineraryToolCallingAgent:
                     )
                 )
                 for idx, call in enumerate(tool_calls):
-                    fn = call.get("function") if isinstance(call.get("function"), dict) else {}
+                    fn = (
+                        call.get("function")
+                        if isinstance(call.get("function"), dict)
+                        else {}
+                    )
                     name = str(fn.get("name") or "").strip()
                     args = _parse_tool_args(fn.get("arguments"))
                     tool_id = str(call.get("id") or f"{name}_{idx}")
@@ -216,10 +225,16 @@ class ItineraryToolCallingAgent:
                     AiMessage(
                         role="user",
                         content=(
-                            "当前 day_card 校验未通过，请优先调用 itinerary_adjust_times / "
-                            "itinerary_replace_poi 进行修复，并在最后调用 itinerary_validate_day。"
+                            "当前 day_card 校验未通过，请优先调用 "
+                            "itinerary_adjust_times / itinerary_replace_poi 进行修复，"
+                            "并在最后调用 "
+                            "itinerary_validate_day。"
                             f"\nissues={json_dumps(validation)}"
-                            + (f"\n还需要再添加 {remaining} 个 sub_trips。" if remaining else "")
+                            + (
+                                f"\n还需要再添加 {remaining} 个 sub_trips。"
+                                if remaining
+                                else ""
+                            )
                         ),
                     )
                 )
@@ -243,9 +258,14 @@ class ItineraryToolCallingAgent:
                 AiMessage(
                     role="user",
                     content=(
-                        "请继续使用工具完成规划：先添加 sub_trips，再修复时间与重复 POI，最后校验。"
+                        "请继续使用工具完成规划：先添加 sub_trips，"
+                        "再修复时间与重复 POI，最后校验。"
                         f"\nissues={json_dumps(validation)}"
-                        + (f"\n还需要再添加 {remaining} 个 sub_trips。" if remaining else "")
+                        + (
+                            f"\n还需要再添加 {remaining} 个 sub_trips。"
+                            if remaining
+                            else ""
+                        )
                     ),
                 )
             )
@@ -259,7 +279,11 @@ class ItineraryToolCallingAgent:
         session: ItinerarySession, candidate_pois: list[dict[str, Any]]
     ):
         interests = []
-        prefs = session.request.preferences if isinstance(session.request.preferences, dict) else {}
+        prefs = (
+            session.request.preferences
+            if isinstance(session.request.preferences, dict)
+            else {}
+        )
         raw = prefs.get("interests")
         if isinstance(raw, list):
             interests = [str(x).strip() for x in raw if str(x).strip()]
@@ -272,7 +296,10 @@ class ItineraryToolCallingAgent:
             for poi in candidate_pois:
                 if poi.get("category") != cat:
                     continue
-                key = (str(poi.get("provider") or ""), str(poi.get("provider_id") or ""))
+                key = (
+                    str(poi.get("provider") or ""),
+                    str(poi.get("provider_id") or ""),
+                )
                 if key in session.used_pois:
                     continue
                 chosen.append(poi)

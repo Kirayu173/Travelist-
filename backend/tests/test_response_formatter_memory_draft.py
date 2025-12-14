@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import pytest
-
 from app.agents import build_tool_registry
 from app.agents.assistant.nodes import AssistantNodes
 from app.agents.assistant.state import AssistantState
-from app.ai.models import AiChatResult
 from app.ai.memory_models import MemoryItem
+from app.ai.models import AiChatResult
 from app.ai.prompts import PromptRegistry
 
 
@@ -76,7 +75,10 @@ async def test_response_formatter_uses_memory_when_tool_agent_no_tool_calls():
         MemoryItem(
             id="m1",
             score=0.67,
-            text="Q: 明天广州天气怎么样 A: 广州明天（2025-12-15）的天气预报如下：最高19°C，最低9°C",
+            text=(
+                "Q: 明天广州天气怎么样 A: 广州明天（2025-12-15）的天气预报如下："
+                "最高19°C，最低9°C"
+            ),
         )
     ]
 
@@ -87,4 +89,3 @@ async def test_response_formatter_uses_memory_when_tool_agent_no_tool_calls():
     assert "记忆摘要" in prompt_input
     assert "广州" in prompt_input
     assert "工具智能体草稿回答" in prompt_input
-

@@ -16,9 +16,12 @@ class WeatherQuerySpec:
 _DATE_RE = re.compile(r"(20\d{2})[.\-/年](\d{1,2})[.\-/月](\d{1,2})日?")
 
 
-def resolve_weather_date(query: str, *, base_date: dt.date) -> tuple[dt.date | None, int | None, str | None]:
+def resolve_weather_date(
+    query: str, *, base_date: dt.date
+) -> tuple[dt.date | None, int | None, str | None]:
     """
-    Resolve target date for CN queries like 今天/明天/后天/大后天 or explicit YYYY-MM-DD.
+    Resolve target date for CN queries like 今天/明天/后天/大后天 or explicit
+    YYYY-MM-DD.
 
     Returns (target_date, day_offset, day_label). Offsets are relative to base_date.
     """
@@ -28,7 +31,11 @@ def resolve_weather_date(query: str, *, base_date: dt.date) -> tuple[dt.date | N
 
     match = _DATE_RE.search(text)
     if match:
-        year, month, day = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        year, month, day = (
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3)),
+        )
         try:
             target = dt.date(year, month, day)
         except ValueError:
@@ -88,7 +95,9 @@ def extract_weather_locations(query: str) -> list[str]:
         "",
         text,
     )
-    text = re.sub(r"[\s，,。．.？！?!：:；;（）()【】\[\]“”\"'<>《》、/\\-]+", " ", text).strip()
+    text = re.sub(
+        r"[\s，,。．.？！?!：:；;（）()【】\[\]“”\"'<>《》、/\\-]+", " ", text
+    ).strip()
     if not text:
         return []
 
@@ -98,7 +107,9 @@ def extract_weather_locations(query: str) -> list[str]:
 
 
 def build_weather_query_spec(query: str, *, base_date: dt.date) -> WeatherQuerySpec:
-    target_date, day_offset, day_label = resolve_weather_date(query, base_date=base_date)
+    target_date, day_offset, day_label = resolve_weather_date(
+        query, base_date=base_date
+    )
     locations = extract_weather_locations(query)
     return WeatherQuerySpec(
         locations=locations,
@@ -106,4 +117,3 @@ def build_weather_query_spec(query: str, *, base_date: dt.date) -> WeatherQueryS
         day_offset=day_offset,
         day_label=day_label,
     )
-

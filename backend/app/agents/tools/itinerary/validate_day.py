@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import time as dt_time
 from typing import Any
 
-from app.agents.tools.itinerary.session import ItinerarySession
 from app.agents.tools.common.base import TravelistBaseTool
+from app.agents.tools.itinerary.session import ItinerarySession
 from app.core.settings import settings
 from pydantic import BaseModel, Field
 from pydantic.v1 import PrivateAttr
@@ -22,7 +22,9 @@ class ItineraryValidateDayTool(TravelistBaseTool):
     """校验当天 day_card 的基本一致性与 POI 去重约束。"""
 
     name: str = "itinerary_validate_day"
-    description: str = "检查某天 day_card 是否满足 order_index 连续、时间不重叠、POI 不重复等约束。"
+    description: str = (
+        "检查某天 day_card 是否满足 order_index 连续、时间不重叠、POI 不重复等约束。"
+    )
     args_schema: type[BaseModel] = ItineraryValidateDayInput
 
     _session: ItinerarySession = PrivateAttr()
@@ -52,12 +54,18 @@ class ItineraryValidateDayTool(TravelistBaseTool):
                 }
             )
 
-        orders = [sub.order_index for sub in card.sub_trips if sub.order_index is not None]
+        orders = [
+            sub.order_index for sub in card.sub_trips if sub.order_index is not None
+        ]
         if len(orders) != len(card.sub_trips):
-            issues.append({"code": "missing_order", "message": "some order_index missing"})
+            issues.append(
+                {"code": "missing_order", "message": "some order_index missing"}
+            )
         else:
             if len(set(orders)) != len(orders):
-                issues.append({"code": "duplicate_order", "message": "duplicate order_index"})
+                issues.append(
+                    {"code": "duplicate_order", "message": "duplicate order_index"}
+                )
             else:
                 expected = list(range(min(orders), min(orders) + len(orders)))
                 if sorted(orders) != expected:
@@ -77,7 +85,10 @@ class ItineraryValidateDayTool(TravelistBaseTool):
                 issues.append(
                     {
                         "code": "missing_time",
-                        "message": f"missing start_time/end_time for order_index={sub.order_index}",
+                        "message": (
+                            "missing start_time/end_time for "
+                            f"order_index={sub.order_index}"
+                        ),
                     }
                 )
                 continue
@@ -102,11 +113,19 @@ class ItineraryValidateDayTool(TravelistBaseTool):
         for sub in card.sub_trips:
             ext = sub.ext if isinstance(sub.ext, dict) else {}
             poi = ext.get("poi") if isinstance(ext.get("poi"), dict) else {}
-            key = (str(poi.get("provider") or "").strip(), str(poi.get("provider_id") or "").strip())
+            key = (
+                str(poi.get("provider") or "").strip(),
+                str(poi.get("provider_id") or "").strip(),
+            )
             if not all(key):
                 continue
             if key in seen:
-                issues.append({"code": "duplicate_poi_day", "message": f"poi duplicated in day: {key[0]}/{key[1]}"})
+                issues.append(
+                    {
+                        "code": "duplicate_poi_day",
+                        "message": f"poi duplicated in day: {key[0]}/{key[1]}",
+                    }
+                )
             seen.add(key)
 
         return {"ok": True, "issues": issues, "issue_count": len(issues)}

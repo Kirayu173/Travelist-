@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date as dt_date
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, timedelta
+from datetime import time as dt_time
 from typing import Any
 
 from app.models.plan_schemas import PlanDayCardSchema, PlanRequest, PlanSubTripSchema
@@ -60,14 +61,19 @@ class ItinerarySession:
         if not p or not pid:
             return None
         for poi in self.candidate_pois:
-            if str(poi.get("provider") or "").strip() == p and str(
-                poi.get("provider_id") or ""
-            ).strip() == pid:
+            if (
+                str(poi.get("provider") or "").strip() == p
+                and str(poi.get("provider_id") or "").strip() == pid
+            ):
                 return poi
         return None
 
     def next_order_index(self) -> int:
-        existing = [sub.order_index for sub in self.day_card.sub_trips if sub.order_index is not None]
+        existing = [
+            sub.order_index
+            for sub in self.day_card.sub_trips
+            if sub.order_index is not None
+        ]
         return (max(existing) + 1) if existing else 0
 
     def add_sub_trip(
@@ -118,4 +124,3 @@ class ItinerarySession:
         self.day_card.sub_trips.append(sub_trip)
         self.used_pois.add(key)
         return sub_trip
-

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from app.agents.tools.common.base import TravelistBaseTool
+from app.agents.tools.common.logging import get_tool_logger, log_tool_event
 from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
