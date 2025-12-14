@@ -38,6 +38,7 @@
 5. **智能体全方位优化（去冗余/结构/性能）**
    * 消除重复的 streaming/序列化/会话读写逻辑；
    * 优化关键路径（历史加载、DB 写入、工具调用开销）；
+   * 将“关键业务推理”从 LLM 中剥离为 deterministic（例如相对日期、地点抽取、工具参数校验），并将生成式能力收敛到单一节点（Answer Composer），提升稳定性；
    * 引入必要的限流、背压与资源上限，避免 WS 场景下“慢客户端/高并发”拖垮服务。
 
 ---
@@ -253,25 +254,57 @@ Stage-9 不新增新的“业务能力节点”，重点在“对话通道/会�
   * “DB 读写”在 repository 层；
   * “协议与连接管理”在 ws handler 层。
 
-2) 性能优化点（建议优先级）
+2) 智能体链路重构（高效、稳定、简洁）
+
+**目标**：将“可确定”的逻辑从 LLM 推理中剥离，减少不必要的模型回合与 token 消耗；把生成式能力集中在单点，提升多轮一致性与可测试性。
+
+**必须 deterministic 的节点（不依赖 LLM）**
+
+* `load_context`：会话校验、历史加载与裁剪、反注入清洗（超长/可疑 system 内容）；
+* `memory_retrieve`：mem0 检索 + 去重/截断 + “槽位化”摘要（地点/日期/偏好/已确认约束）；
+* `rule_router`：强规则路由（天气/POI/导航/行程/搜索/闲聊），对高确定性问题优先直达工具；
+* `tool_args_normalize_and_validate`：工具参数补全、schema 校验、范围约束（例如天气预报 ≤4 天）；
+* `task_runner`：工具执行器（超时/重试/降级/并发限制）+ 结构化 tool trace；
+* `result_canonicalize`：将工具输出规范化为统一结构（weather/poi/trip/search），供后续生成使用；
+* `fallback_rules`：缺失槽位（地点/日期等）时输出最小追问，不进入“盲目工具调用”。
+
+**适合 agent 化的节点（仅在开放式/组合推理时启用）**
+
+* `answer_compose`：基于规范化结果 + 槽位记忆 + 历史，生成最终自然语言回复（尽量只调用一次 LLM）；
+* `trip_planner_optional`（可选）：当用户提出“做行程/比较方案/多工具探索”时，LLM 仅负责拆解计划与字段提取；实际工具调用仍由 `task_runner` 执行（强 schema + 调用次数上限）。
+
+**推荐的新链路（Stage-9 落地形态）**
+
+1. `load_context`（deterministic）
+2. `memory_retrieve`（deterministic）
+3. `rule_router`（deterministic）
+4. `task_runner`（deterministic，执行 0~N 个工具）
+5. `answer_compose`（LLM，可选；仅在需要自然语言组织/建议/解释时调用）
+6. `persist`（deterministic：messages/mem0/tool_traces）
+
+> 约束：自主型 agent 不直接持有“任意工具调用权”；其输出为“计划/草稿”，工具执行由 deterministic 执行器负责（校验、限额、可观测）。
+
+3) 性能优化点（建议优先级）
 
 * 降低历史加载成本：只取最近 N 轮 + 必要字段；
 * 降低 tool_traces 体积：对外返回可配置；落库只存摘要；
 * Prompt/ToolRegistry 缓存：复用既有缓存策略，避免每轮重复构建；
 * 减少不必要的对象拷贝与 JSON dump（热点路径）。
 
-3) 可维护性与可测试性
+4) 可维护性与可测试性
 
 * 引入清晰的“对话轮次”抽象（message_id / client_msg_id）；
 * 为 WS handler 增加可注入依赖（便于 pytest 模拟）；
 * 统一错误码与错误结构（REST/SSE/WS 一致）。
 
-4) 优化交付清单（必须交付，避免“只重构不落地”）
+5) 优化交付清单（必须交付，避免“只重构不落地”）
 
 * **目录与职责清单**：写清楚 Stage-9 后各模块职责（ws / service / repository / agents），并在代码结构上体现；
 * **统一 streaming**：WS 与 SSE 共享同一套 chunk/result/error 结构定义与序列化（允许传输层不同）；
 * **性能基线**：提供至少一组本地基线数据（例如单轮/多轮平均耗时、history 查询次数、消息落库次数），用于后续阶段回归；
 * **冗余清理**：删除/合并重复的会话查询与消息序列化逻辑，避免出现两套“看起来一样但行为不一致”的实现。
+* **deterministic 核心链路落地**：将天气相对日期/地点抽取、工具参数校验、缺槽追问等关键路径实现为可单测的 deterministic 模块，并在 WS/REST 入口复用；
+* **LLM 调用收敛**：在常见请求（天气/POI/导航/事实搜索）中，尽量将模型调用收敛为单次 `answer_compose`（或在工具已返回可用自然语言时直接跳过）。
 
 ### 4.7 任务 T9-7：测试与回归（含 WS）
 
@@ -304,6 +337,7 @@ Stage-9 不新增新的“业务能力节点”，重点在“对话通道/会�
 5. **优化交付**
    * 完成智能体相关冗余清理与模块边界整理（至少包含 streaming 复用与会话 repository 化）；
    * 在同等输入下，WS 对话关键路径性能不劣于现有 SSE（可用简单基线对比）。
+   * 多轮稳定性提升：对“追问补槽”（如“薄外套冷不冷？”）能稳定利用 session 记忆/历史避免重复追问；对“相对日期天气”（今天/明天/后天）结果日期不漂移。
 6. **质量**
    * pytest 覆盖 WS 主链路与安全边界；
    * `ruff`/`black`/`pytest` 在项目约定下通过（如项目已启用）。

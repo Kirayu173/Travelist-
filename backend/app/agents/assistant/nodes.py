@@ -204,13 +204,22 @@ class AssistantNodes:
         if not self._tool_agent:
             return await self._fallback_direct_tool_run(state)
         try:
-            messages = [
-                {
-                    "role": "system",
-                    "content": self._render_time_anchor_message(),
-                },
-                {"role": "user", "content": state.query},
+            messages: list[dict[str, str]] = [
+                {"role": "system", "content": self._render_time_anchor_message()},
             ]
+            history_block = self._render_history_block(state.history)
+            if history_block.strip():
+                messages.append({"role": "system", "content": history_block})
+            if state.trip_data:
+                messages.append({"role": "system", "content": self._summarize_trip(state.trip_data)})
+            if state.memories:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": "相关记忆（mem0 召回）：\n" + self._summarize_memories(state.memories),
+                    }
+                )
+            messages.append({"role": "user", "content": state.query})
             context = AgentContext(
                 user_id=str(state.user_id),
                 session_id=str(state.session_id or state.user_id),
@@ -496,7 +505,13 @@ class AssistantNodes:
                 "used_memory": len(state.memories),
             },
         )
-        if state.answer_text:
+        draft_answer: str | None = None
+        # When tool_agent answers without calling tools (selected_tool="create_agent"),
+        # do not skip: let the formatter incorporate memories/history for multi-turn coherence.
+        if state.answer_text and state.selected_tool in (None, "create_agent"):
+            draft_answer = state.answer_text
+            state.answer_text = None
+        elif state.answer_text:
             state.tool_traces.append(
                 {
                     "node": "response_formatter",
@@ -512,6 +527,8 @@ class AssistantNodes:
             context_blocks.append(self._summarize_trip(state.trip_data))
         if state.memories:
             context_blocks.append(self._summarize_memories(state.memories))
+        if draft_answer:
+            context_blocks.append("工具智能体草稿回答：\n" + draft_answer)
         if state.poi_results:
             context_blocks.append(self._summarize_poi_results(state.poi_results))
         if state.tool_result:
