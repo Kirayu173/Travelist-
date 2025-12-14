@@ -111,6 +111,39 @@ class AiClient:
             answer = self._mock_json_response(prompt)
         else:
             answer = f"mock:{prompt}"
+        if request.tools:
+            # Minimal tool-calling stub for tests: always suggest calling the first tool
+            # once, then return a textual "done" message after a tool result appears.
+            has_tool_result = any(msg.role == "tool" for msg in request.messages)
+            if not has_tool_result:
+                first = request.tools[0] if request.tools else None
+                fn = ((first or {}).get("function") or {}) if isinstance(first, dict) else {}
+                tool_name = fn.get("name") or "unknown_tool"
+                raw = {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "mock_tool_call_0",
+                                "type": "function",
+                                "function": {"name": tool_name, "arguments": {}},
+                            }
+                        ],
+                    }
+                }
+                answer = ""
+            else:
+                raw = {"message": {"role": "assistant", "content": "done"}}
+                answer = "done"
+            await self._emit_chunk(
+                trace_id=trace_id,
+                delta=answer,
+                index=0,
+                done=True,
+                on_chunk=on_chunk,
+            )
+            return answer, len(answer.split()) if answer else 0, raw
         await self._emit_chunk(
             trace_id=trace_id,
             delta=answer,
@@ -267,9 +300,14 @@ class AiClient:
         used_model = model_override or self._model
         payload: dict[str, Any] = {
             "model": used_model,
-            "messages": [msg.model_dump(mode="json") for msg in request.messages],
+            "messages": [
+                msg.model_dump(mode="json", exclude_none=True) for msg in request.messages
+            ],
             "stream": True,
         }
+        if request.tools:
+            payload["tools"] = request.tools
+            payload["stream"] = False
         if request.response_format == "json":
             payload["format"] = "json"
         options: dict[str, Any] = {}
@@ -288,6 +326,31 @@ class AiClient:
         timeout = httpx.Timeout(request.timeout_s)
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
+                if request.tools:
+                    response = await client.post(url, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    last_payload = data
+                    message = data.get("message") or {}
+                    answer = message.get("content") or ""
+                    usage_tokens = (
+                        data.get("eval_count")
+                        or data.get("total_tokens")
+                        or data.get("prompt_eval_count")
+                    )
+                    await self._emit_chunk(
+                        trace_id=trace_id,
+                        delta=answer,
+                        index=0,
+                        done=True,
+                        on_chunk=on_chunk,
+                    )
+                    if not answer and not (message.get("tool_calls") or []):
+                        raise AiClientError(
+                            "invalid_output",
+                            "provider returned empty response",
+                        )
+                    return answer, usage_tokens, last_payload
                 async with client.stream("POST", url, json=payload) as response:
                     try:
                         response.raise_for_status()

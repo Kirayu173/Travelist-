@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     plan_deep_context_max_chars: int = Field(
         default=1800, validation_alias="PLAN_DEEP_CONTEXT_MAX_CHARS"
     )
+    plan_deep_tool_max_steps: int = Field(
+        default=18, validation_alias="PLAN_DEEP_TOOL_MAX_STEPS"
+    )
     plan_deep_outline_source: Literal["fast", "llm_outline"] = Field(
         default="fast", validation_alias="PLAN_DEEP_OUTLINE_SOURCE"
     )

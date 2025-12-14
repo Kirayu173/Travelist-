@@ -13,6 +13,7 @@ from app.core.logging import get_logger
 from app.core.redis import get_redis_client
 from app.core.settings import settings
 from app.models.orm import Poi
+from app.utils.json_utils import json_dumps
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import text
 
@@ -217,7 +218,7 @@ class PoiService:
         if not self._redis:
             return
         try:
-            await self._redis.setex(key, ttl, json.dumps(value))
+            await self._redis.setex(key, ttl, json_dumps(value))
         except Exception:
             return
 

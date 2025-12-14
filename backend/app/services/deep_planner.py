@@ -9,7 +9,9 @@ from datetime import time as dt_time
 from time import perf_counter
 from typing import Any
 
-from app.ai import AiChatRequest, AiClientError, AiMessage, get_ai_client
+from app.agents.itinerary import ItineraryToolCallingAgent
+from app.agents.tools.itinerary import ItinerarySession
+from app.ai import AiClientError
 from app.ai.memory_models import MemoryLevel
 from app.core.logging import get_logger
 from app.core.settings import settings
@@ -23,6 +25,7 @@ from app.services.fast_planner import FastPlanner
 from app.services.geocode_service import GeocodeService, get_geocode_service
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.poi_service import PoiService, get_poi_service
+from app.utils.json_utils import json_dumps
 from pydantic import ValidationError
 
 
@@ -425,7 +428,23 @@ class DeepPlanner:
                 if key in seen:
                     continue
                 seen.add(key)
-                payload = dict(item)
+                raw_payload = dict(item)
+                payload = {
+                    k: raw_payload.get(k)
+                    for k in (
+                        "provider",
+                        "provider_id",
+                        "name",
+                        "category",
+                        "addr",
+                        "rating",
+                        "lat",
+                        "lng",
+                        "distance_m",
+                        "ext",
+                    )
+                    if k in raw_payload
+                }
                 payload.setdefault("ext", {})
                 payload["ext"] = dict(payload.get("ext") or {})
                 payload["ext"].setdefault("source", meta.get("source"))
@@ -475,9 +494,15 @@ class DeepPlanner:
                     "planner_deep_day",
                     "ok",
                     (perf_counter() - t0) * 1000,
-                    {"day_index": day_index, "attempt": attempt + 1},
+                    {
+                        "day_index": day_index,
+                        "attempt": attempt + 1,
+                        "llm_calls": llm_result.get("llm_calls"),
+                        "tool_calls": llm_result.get("tool_calls"),
+                        "steps": llm_result.get("steps"),
+                    },
                 )
-                call_metrics["llm_calls"] += 1
+                call_metrics["llm_calls"] += int(llm_result.get("llm_calls") or 1)
                 call_metrics["llm_latency_ms"] = round(
                     float(call_metrics["llm_latency_ms"])
                     + float(llm_result.get("latency_ms") or 0.0),
@@ -547,74 +572,54 @@ class DeepPlanner:
         max_context_days = max(
             int(getattr(settings, "plan_deep_context_max_days", 3)), 0
         )
-        max_context_chars = max(
-            int(getattr(settings, "plan_deep_context_max_chars", 1800)), 200
-        )
-
         recent = context[-max_context_days:] if max_context_days else []
-        context_payload = json.dumps(recent, ensure_ascii=False)
-        if len(context_payload) > max_context_chars:
-            context_payload = context_payload[: max_context_chars - 3] + "..."
 
         max_pois = max(int(getattr(settings, "plan_deep_max_pois", 24)), 1)
         trimmed_pois = candidate_pois[:max_pois]
 
-        system_prompt = (
-            "你是 Travelist+ 行程规划器（Deep 模式）。"
-            "你的任务是为单日生成 day_card JSON。严格要求："
-            "1) 只输出 JSON，不要输出 Markdown/解释文字；"
-            "2) 输出需满足字段名与类型："
-            "{day_index:int,date:YYYY-MM-DD,note?:str,sub_trips:[...]};"
-            "3) sub_trips 必须包含 order_index(从0连续)、activity、loc_name、"
-            "start_time/end_time(HH:MM)；"
-            "4) 引用候选 POI 时必须在 sub_trips.ext.poi 写入 "
-            "provider/provider_id，且避免 used_pois；"
-            "5) 不要引入 generated_at 等动态字段。"
+        prev_used = set(used_pois)
+        working_used = set(used_pois)
+        session = ItinerarySession(
+            request=request,
+            day_index=day_index,
+            date=date,
+            candidate_pois=trimmed_pois,
+            used_pois=working_used,
         )
-        payload = {
-            "task": "plan_day",
-            "destination": request.destination,
-            "start_date": request.start_date.isoformat(),
-            "end_date": request.end_date.isoformat(),
-            "preferences": request.preferences,
-            "outline": outline,
-            "context": context_payload,
-            "day_index": day_index,
-            "date": date.isoformat(),
-            "candidate_pois": trimmed_pois,
-            "used_pois": [
-                {"provider": p, "provider_id": pid} for p, pid in sorted(used_pois)
-            ],
-        }
+        agent = ItineraryToolCallingAgent()
+        try:
+            day_card, tool_metrics = await agent.plan_day(
+                session=session,
+                outline=outline,
+                context=recent,
+                candidate_pois=trimmed_pois,
+                used_pois=prev_used,
+            )
+        except AiClientError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise DeepPlannerError(str(exc)[:200]) from exc
+        used_pois.clear()
+        used_pois.update(working_used)
 
-        timeout_s = float(getattr(settings, "plan_deep_timeout_s", 30.0))
-        max_tokens = int(
-            getattr(settings, "plan_deep_day_max_tokens", settings.plan_deep_max_tokens)
-        )
-        model_override = str(getattr(settings, "plan_deep_model", "") or "").strip()
-        ai_request = AiChatRequest(
-            messages=[
-                AiMessage(role="system", content=system_prompt),
-                AiMessage(role="user", content=json.dumps(payload, ensure_ascii=False)),
-            ],
-            response_format="json",
-            timeout_s=timeout_s,
-            model=model_override or None,
-            temperature=float(getattr(settings, "plan_deep_temperature", 0.2)),
-            max_tokens=max_tokens,
-        )
-        client = get_ai_client()
-        result = await client.chat(ai_request)
-
-        parsed = json.loads(result.content)
-        day_card = PlanDayCardSchema(**parsed)
-
+        provider_name = str(
+            getattr(settings, "ai_provider", None)
+            or getattr(settings, "llm_provider", None)
+            or ""
+        ).strip()
+        model_name = str(
+            getattr(settings, "plan_deep_model", None)
+            or getattr(settings, "ai_model_chat", None)
+            or ""
+        ).strip()
         llm_metrics = {
-            "latency_ms": result.latency_ms,
-            "tokens_total": result.usage_tokens,
-            "provider": result.provider,
-            "model": result.model,
-            "trace_id": result.trace_id,
+            "latency_ms": float(tool_metrics.get("llm_latency_ms") or 0.0),
+            "tokens_total": 0,
+            "provider": provider_name,
+            "model": model_name,
+            "llm_calls": int(tool_metrics.get("llm_calls") or 0),
+            "tool_calls": int(tool_metrics.get("tool_calls") or 0),
+            "steps": int(tool_metrics.get("steps") or 0),
         }
         return day_card, llm_metrics
 
