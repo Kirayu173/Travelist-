@@ -7,6 +7,7 @@ from app.agents.assistant.state import AssistantState
 from app.agents.tools.registry import RegisteredTool, ToolRegistry
 from app.ai import AiChatRequest, AiClient, AiClientError, AiMessage
 from app.ai.prompts import PromptRegistry
+from app.core.cache import build_cache_key, cache_backend
 from app.core.logging import get_logger
 from app.core.settings import settings
 
@@ -33,15 +34,34 @@ class ToolSelector:
         if not available:
             return None, {}, "no_tools_available"
 
-        model_choice = await self._run_llm_routing(state, available)
-        if model_choice:
-            name, args, reason = model_choice
-            return name, args, reason
+        ttl = int(getattr(settings, "ai_tool_select_cache_ttl_seconds", 30))
+        tools_sig = ",".join(sorted(tool.name for tool in available))
+        cache_key = build_cache_key(
+            "assistant:tool_select",
+            q=state.query,
+            intent=state.intent or "",
+            tools=tools_sig,
+            session_id=state.session_id or 0,
+        )
 
-        heuristic_choice = self._heuristic_choice(state.query)
-        if heuristic_choice:
-            return heuristic_choice
-        return None, {}, "no_tool_matched"
+        async def _compute():
+            model_choice = await self._run_llm_routing(state, available)
+            if model_choice:
+                name, args, reason = model_choice
+                return name, args, reason
+
+            heuristic_choice = self._heuristic_choice(state.query)
+            if heuristic_choice:
+                return heuristic_choice
+            return None, {}, "no_tool_matched"
+
+        name, args, reason = await cache_backend.remember_async(
+            "assistant_tool_select",
+            cache_key,
+            ttl,
+            _compute,
+        )
+        return name, args, reason
 
     async def _run_llm_routing(
         self,

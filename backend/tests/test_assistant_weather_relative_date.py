@@ -95,7 +95,6 @@ async def test_assistant_graph_weather_direct_uses_tomorrow_date(monkeypatch):
         tool_selector=_StubSelector(),
         tool_registry=registry,
         poi_service=_StubPoiService(),
-        tool_agent=None,
     )
     graph = build_assistant_graph(nodes)
     state = AssistantState(

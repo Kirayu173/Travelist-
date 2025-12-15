@@ -58,7 +58,6 @@ async def test_response_formatter_uses_memory_when_tool_agent_no_tool_calls():
         tool_selector=_StubSelector(),
         tool_registry=build_tool_registry(),
         poi_service=_StubPoiService(),
-        tool_agent=None,
     )
     state = AssistantState(
         user_id=1,
@@ -69,7 +68,7 @@ async def test_response_formatter_uses_memory_when_tool_agent_no_tool_calls():
         top_k=3,
         history=[],
     )
-    state.selected_tool = "create_agent"
+    state.selected_tool = None
     state.answer_text = "（工具智能体）需要城市和日期"
     state.memories = [
         MemoryItem(
@@ -88,4 +87,4 @@ async def test_response_formatter_uses_memory_when_tool_agent_no_tool_calls():
     prompt_input = ai_client.last_request.messages[-1].content
     assert "记忆摘要" in prompt_input
     assert "广州" in prompt_input
-    assert "工具智能体草稿回答" in prompt_input
+    assert "草稿回答" in prompt_input

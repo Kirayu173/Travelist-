@@ -1,21 +1,25 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from contextlib import suppress
+from uuid import uuid4
 
 from app.ai import AiClientError, AiStreamChunk
+from app.core.logging import get_logger
 from app.models.ai_schemas import ChatDemoPayload, ChatPayload
 from app.models.plan_schemas import PlanRequest
 from app.services.ai_chat_service import AiChatDemoService, get_ai_chat_service
 from app.services.assistant_service import AssistantService, get_assistant_service
 from app.services.plan_service import PlanServiceError, get_plan_service
 from app.services.plan_task_service import PlanTaskServiceError, get_plan_task_service
+from app.utils.api_errors import format_exception
 from app.utils.responses import error_response, success_response
+from app.utils.sse import sse_data, sse_done
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+LOGGER = get_logger(__name__)
 
 
 def _demo_service() -> AiChatDemoService:
@@ -100,12 +104,12 @@ async def _enqueue_sse_chunk(queue: asyncio.Queue[str], chunk: AiStreamChunk) ->
         return
     event = {
         "event": "chunk",
-        "trace_id": chunk.trace_id,
+        "ai_trace_id": chunk.trace_id,
         "index": chunk.index,
         "delta": chunk.delta,
         "done": chunk.done,
     }
-    await queue.put(_format_sse(event))
+    await queue.put(sse_data(event))
 
 
 async def _event_stream(queue: asyncio.Queue[str], producer_task: asyncio.Task):
@@ -149,20 +153,58 @@ async def chat_demo(payload: ChatDemoPayload):
     description="支持 session_id 的多轮对话，行程查询与记忆读写，支持流式输出。",
 )
 async def chat(payload: ChatPayload):
+    request_id = f"chat-{uuid4().hex}"
+    LOGGER.info(
+        "ai.chat.request",
+        extra={
+            "request_id": request_id,
+            "user_id": payload.user_id,
+            "trip_id": payload.trip_id,
+            "session_id": payload.session_id,
+            "stream": payload.stream,
+        },
+    )
     service = _assistant_service()
     if payload.stream:
-        return await _stream_assistant(service, payload)
+        return await _stream_assistant(service, payload, request_id=request_id)
     try:
         result = await service.run_chat(payload)
     except ValueError as exc:
+        LOGGER.warning(
+            "ai.chat.bad_request",
+            extra={
+                "error": str(exc),
+                "user_id": payload.user_id,
+                "trip_id": payload.trip_id,
+            },
+        )
         return JSONResponse(
             status_code=400,
             content=error_response(str(exc), code=14030),
         )
     except Exception as exc:  # pragma: no cover - defensive
+        detail = format_exception(exc, request_id=request_id)
+        LOGGER.exception(
+            "ai.chat.failed",
+            extra={
+                "request_id": request_id,
+                "error_type": detail.error_type,
+                "user_id": payload.user_id,
+                "trip_id": payload.trip_id,
+                "session_id": payload.session_id,
+            },
+        )
         return JSONResponse(
             status_code=502,
-            content=error_response("AI 调用失败", code=3001, data={"error": str(exc)}),
+            content=error_response(
+                "AI 调用失败",
+                code=3001,
+                data={
+                    "request_id": detail.request_id,
+                    "error_type": detail.error_type,
+                    "detail": detail.detail,
+                },
+            ),
         )
     return success_response(result.model_dump(mode="json"))
 
@@ -172,6 +214,7 @@ async def _stream_chat(
     payload: ChatDemoPayload,
 ) -> StreamingResponse:
     queue: asyncio.Queue[str] = asyncio.Queue()
+    request_id = f"chat-demo-{uuid4().hex}"
 
     async def on_chunk(chunk: AiStreamChunk) -> None:
         await _enqueue_sse_chunk(queue, chunk)
@@ -180,26 +223,28 @@ async def _stream_chat(
         try:
             result = await service.run_chat(payload, stream_handler=on_chunk)
             await queue.put(
-                _format_sse(
+                sse_data(
                     {
                         "event": "result",
+                        "request_id": request_id,
                         "payload": result.model_dump(mode="json"),
                     }
                 )
             )
         except AiClientError as exc:
             await queue.put(
-                _format_sse(
+                sse_data(
                     {
                         "event": "error",
+                        "request_id": request_id,
                         "error_type": exc.type,
                         "message": exc.message,
-                        "trace_id": exc.trace_id,
+                        "ai_trace_id": exc.trace_id,
                     }
                 )
             )
         finally:
-            await queue.put("data: [DONE]\n\n")
+            await queue.put(sse_done())
 
     producer_task = asyncio.create_task(producer())
     return StreamingResponse(
@@ -210,45 +255,85 @@ async def _stream_chat(
 async def _stream_assistant(
     service: AssistantService,
     payload: ChatPayload,
+    *,
+    request_id: str,
 ) -> StreamingResponse:
     queue: asyncio.Queue[str] = asyncio.Queue()
+    sse_error_id = f"sse-{uuid4().hex}"
 
     async def on_chunk(chunk: AiStreamChunk) -> None:
-        await _enqueue_sse_chunk(queue, chunk)
+        # keep chunk.ai_trace_id from model, but attach request_id for debugging
+        if not chunk.delta and not chunk.done:
+            return
+        event = {
+            "event": "chunk",
+            "request_id": request_id,
+            "ai_trace_id": chunk.trace_id,
+            "index": chunk.index,
+            "delta": chunk.delta,
+            "done": chunk.done,
+        }
+        await queue.put(sse_data(event))
 
     async def producer() -> None:
         try:
             result = await service.run_chat(payload, stream_handler=on_chunk)
             await queue.put(
-                _format_sse(
+                sse_data(
                     {
                         "event": "result",
+                        "request_id": request_id,
                         "payload": result.model_dump(mode="json"),
                     }
                 )
             )
         except ValueError as exc:
+            LOGGER.warning(
+                "ai.chat_stream.bad_request",
+                extra={
+                    "request_id": request_id,
+                    "error": str(exc),
+                    "user_id": payload.user_id,
+                    "trip_id": payload.trip_id,
+                    "session_id": payload.session_id,
+                },
+            )
             await queue.put(
-                _format_sse(
+                sse_data(
                     {
                         "event": "error",
+                        "request_id": request_id,
                         "error_type": "bad_request",
                         "message": str(exc),
                     }
                 )
             )
         except Exception as exc:  # pragma: no cover - defensive
+            detail = format_exception(exc, request_id=request_id)
+            LOGGER.exception(
+                "ai.chat_stream.failed",
+                extra={
+                    "request_id": request_id,
+                    "error_type": detail.error_type,
+                    "user_id": payload.user_id,
+                    "trip_id": payload.trip_id,
+                    "session_id": payload.session_id,
+                },
+            )
             await queue.put(
-                _format_sse(
+                sse_data(
                     {
                         "event": "error",
-                        "error_type": exc.__class__.__name__,
+                        "request_id": detail.request_id,
+                        "error_type": detail.error_type,
                         "message": "AI 调用失败",
+                        "detail": detail.detail,
+                        "sse_error_id": sse_error_id,
                     }
                 )
             )
         finally:
-            await queue.put("data: [DONE]\n\n")
+            await queue.put(sse_done())
 
     producer_task = asyncio.create_task(producer())
     return StreamingResponse(
@@ -256,6 +341,5 @@ async def _stream_assistant(
     )
 
 
-def _format_sse(payload: dict) -> str:
-    data = json.dumps(payload, ensure_ascii=False)
-    return f"data: {data}\n\n"
+def _format_sse(payload: dict) -> str:  # pragma: no cover - backward compat
+    return sse_data(payload)

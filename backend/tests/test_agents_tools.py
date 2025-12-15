@@ -9,6 +9,7 @@ from app.agents.assistant.tool_selection import ToolSelector
 from app.agents.tools.system.current_time import CurrentTimeTool
 from app.ai.models import AiChatResult
 from app.ai.prompts import PromptRegistry
+from app.core.cache import cache_backend
 
 
 class _StubAiClient:
@@ -118,6 +119,28 @@ async def test_tool_selector_prefers_model_json():
     assert name == "current_time"
     assert args.get("timezone") == "UTC"
     assert reason
+
+
+@pytest.mark.asyncio
+async def test_tool_selector_cache_reuses_llm_result():
+    cache_backend.invalidate("assistant_tool_select")
+    registry = build_tool_registry()
+    model_reply = '{"tool": "current_time", "arguments": {}, "reason": "cached"}'
+    selector = ToolSelector(
+        ai_client=_StubAiClient([model_reply]),
+        prompt_registry=PromptRegistry(),
+        tool_registry=registry,
+    )
+    state = AssistantState(
+        user_id=1,
+        trip_id=None,
+        session_id=42,
+        query="现在几点",
+        top_k=3,
+    )
+    first = await selector.select_tool(state)
+    second = await selector.select_tool(state)
+    assert first == second
 
 
 @pytest.mark.asyncio

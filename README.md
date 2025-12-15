@@ -50,4 +50,7 @@ python ..\scripts\test_connections.py
 
 ## 配置补充
 - `CACHE_PROVIDER`（对应 settings.cache_provider）：`memory` / `redis`，默认为内存缓存；选择 `redis` 可在多实例间共享缓存。
+- `AI_MEMORY_CACHE_TTL_SECONDS`：智能助手记忆召回缓存 TTL（秒），用于降低重复 embeddings / mem0 搜索开销。
+- `AI_MEMORY_DUAL_WRITE_ENABLED`：是否开启记忆双写（session + user/trip），提升跨会话可用性。
+- `AI_TOOL_SELECT_CACHE_TTL_SECONDS`：工具选择结果缓存 TTL（秒），减少短时间重复请求的 LLM 路由开销。
 - 其他配置见 `.env.example` 与 `backend/app/core/settings.py`。

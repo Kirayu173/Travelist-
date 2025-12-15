@@ -5,7 +5,6 @@ from typing import Any
 from app.agents import AssistantState, build_assistant_graph, build_tool_registry
 from app.agents.assistant.nodes import AssistantNodes
 from app.agents.assistant.tool_selection import ToolSelector
-from app.agents.tool_agent import build_tool_agent
 from app.agents.tools.registry import ToolRegistry
 from app.ai import AiStreamChunk, StreamCallback, get_ai_client
 from app.ai.memory_models import MemoryLevel
@@ -18,6 +17,7 @@ from app.models.orm import ChatSession, Message
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.poi_service import PoiService, get_poi_service
 from app.services.trip_service import TripQueryService
+from app.utils.serialization import sanitize_for_json
 
 
 class AssistantService:
@@ -42,7 +42,6 @@ class AssistantService:
             prompt_registry=self._prompt_registry,
             tool_registry=self._tool_registry,
         )
-        self._tool_agent = build_tool_agent(self._tool_registry.available())
         nodes = AssistantNodes(
             ai_client=self._ai_client,
             memory_service=self._memory_service,
@@ -51,7 +50,6 @@ class AssistantService:
             tool_selector=self._tool_selector,
             tool_registry=self._tool_registry,
             poi_service=self._poi_service,
-            tool_agent=self._tool_agent,
         )
         self._graph = build_assistant_graph(nodes)
         self._logger = get_logger(__name__)
@@ -62,13 +60,10 @@ class AssistantService:
         *,
         stream_handler: StreamCallback | None = None,
     ) -> ChatResult:
-        client_supplied_session = payload.session_id is not None
         session_obj = self._ensure_session(payload)
         history = self._load_history(session_obj.id)
         max_k = payload.top_k_memory or settings.mem0_default_k
-        memory_level = self._resolve_memory_level(
-            payload, client_supplied_session=client_supplied_session
-        )
+        memory_level = self._resolve_memory_level(payload, session_id=session_obj.id)
         poi_query = {}
         if payload.poi_type:
             poi_query["type"] = payload.poi_type
@@ -147,6 +142,7 @@ class AssistantService:
         )
         used_memory = result_state.memories if payload.return_memory else []
         tool_traces = result_state.tool_traces if payload.return_tool_traces else []
+        tool_result = sanitize_for_json(result_state.tool_result)
         result = ChatResult(
             session_id=session_obj.id,
             answer=answer,
@@ -157,7 +153,7 @@ class AssistantService:
             messages=messages,
             memory_record_id=memory_record_id,
             selected_tool=result_state.selected_tool,
-            tool_result=result_state.tool_result,
+            tool_result=tool_result,
             tool_error=result_state.tool_error,
         )
         return result
@@ -240,32 +236,56 @@ class AssistantService:
         session_id: int,
         answer: str,
     ) -> str | None:
-        try:
-            level = self._resolve_memory_level(
-                payload, client_supplied_session=payload.session_id is not None
-            )
-        except ValueError:
-            return None
         metadata = {
             "source": "assistant_v1",
             "session_id": session_id,
         }
         if payload.trip_id:
             metadata["trip_id"] = payload.trip_id
-        return await self._memory_service.write_memory(
+        text = f"Q: {payload.query}\nA: {answer}"
+        record_ids: dict[str, str] = {}
+
+        session_level_id = await self._memory_service.write_memory(
             user_id=payload.user_id,
-            level=level,
-            text=f"Q: {payload.query}\nA: {answer}",
+            level=MemoryLevel.session,
+            text=text,
             trip_id=payload.trip_id,
             session_id=str(session_id),
-            metadata=metadata,
+            metadata={**metadata, "memory_level": MemoryLevel.session.value},
         )
+        record_ids["session"] = session_level_id
+
+        if getattr(settings, "ai_memory_dual_write_enabled", True):
+            if payload.trip_id:
+                trip_id = await self._memory_service.write_memory(
+                    user_id=payload.user_id,
+                    level=MemoryLevel.trip,
+                    text=text,
+                    trip_id=payload.trip_id,
+                    session_id=str(session_id),
+                    metadata={**metadata, "memory_level": MemoryLevel.trip.value},
+                )
+                record_ids["trip"] = trip_id
+            else:
+                user_id = await self._memory_service.write_memory(
+                    user_id=payload.user_id,
+                    level=MemoryLevel.user,
+                    text=text,
+                    trip_id=payload.trip_id,
+                    session_id=str(session_id),
+                    metadata={**metadata, "memory_level": MemoryLevel.user.value},
+                )
+                record_ids["user"] = user_id
+
+        # store additional ids for diagnostics in-process
+        # (ChatResult only returns the primary id for compatibility)
+        return record_ids.get("session")
 
     @staticmethod
     def _resolve_memory_level(
-        payload: ChatPayload, *, client_supplied_session: bool
+        payload: ChatPayload, *, session_id: int | None
     ) -> MemoryLevel:
-        if client_supplied_session:
+        if session_id is not None:
             return MemoryLevel.session
         if payload.trip_id:
             return MemoryLevel.trip
@@ -288,7 +308,6 @@ class AssistantService:
                     done=idx == len(parts) - 1,
                 )
             )
-
 
 _assistant_service: AssistantService | None = None
 

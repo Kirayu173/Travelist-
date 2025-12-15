@@ -156,6 +156,15 @@ class Settings(BaseSettings):
     ai_assistant_max_history_rounds: int = 6
     ai_prompt_cache_ttl: int = 60
     ai_prompt_edit_in_prod: bool = False
+    ai_memory_cache_ttl_seconds: int = Field(
+        default=30, validation_alias="AI_MEMORY_CACHE_TTL_SECONDS"
+    )
+    ai_memory_dual_write_enabled: bool = Field(
+        default=True, validation_alias="AI_MEMORY_DUAL_WRITE_ENABLED"
+    )
+    ai_tool_select_cache_ttl_seconds: int = Field(
+        default=30, validation_alias="AI_TOOL_SELECT_CACHE_TTL_SECONDS"
+    )
     mem0_fallback_ttl_seconds: int = 1800
     mem0_fallback_max_entries_per_ns: int = 500
     mem0_fallback_max_total_entries: int = 5000

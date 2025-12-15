@@ -95,14 +95,15 @@
         </div>
         <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
             <div class="border border-slate-200 rounded-xl p-3">
-                <div class="text-[11px] text-slate-500 uppercase">AI Meta</div>
-                <div class="text-xs text-slate-700 space-y-1 mt-2">
-                    <div>Trace: <span id="metaTrace" class="font-mono">-</span></div>
-                    <div>Model: <span id="metaModel" class="font-mono">-</span></div>
-                    <div>Latency: <span id="metaLatency">-</span></div>
-                    <div>Tokens: <span id="metaTokens">-</span></div>
-                </div>
-            </div>
+                 <div class="text-[11px] text-slate-500 uppercase">AI Meta</div>
+                 <div class="text-xs text-slate-700 space-y-1 mt-2">
+                     <div>Request: <span id="metaRequestId" class="font-mono">-</span></div>
+                     <div>Trace: <span id="metaTrace" class="font-mono">-</span></div>
+                     <div>Model: <span id="metaModel" class="font-mono">-</span></div>
+                     <div>Latency: <span id="metaLatency">-</span></div>
+                     <div>Tokens: <span id="metaTokens">-</span></div>
+                 </div>
+             </div>
             <div class="border border-slate-200 rounded-xl p-3">
                 <div class="flex items-center justify-between">
                     <div class="text-[11px] text-slate-500 uppercase">记忆召回</div>
@@ -148,7 +149,27 @@ const topKInput = document.getElementById("topK");
 const queryInput = document.getElementById("queryInput");
 const chatHistory = document.getElementById("chatHistory");
 const sendBtn = document.getElementById("sendBtn");
-let currentSessionId = defaults.session_id || null;
+function _sessionStorageKey(userId) { return `ai_console:last_session:${userId}`; }
+function loadPersistedSessionId(userId) {
+    try {
+        const raw = localStorage.getItem(_sessionStorageKey(userId));
+        const parsed = raw ? parseInt(raw, 10) : NaN;
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    } catch (_) {
+        return null;
+    }
+}
+function persistSessionId(userId, sessionId) {
+    try {
+        if (!sessionId) {
+            localStorage.removeItem(_sessionStorageKey(userId));
+        } else {
+            localStorage.setItem(_sessionStorageKey(userId), String(sessionId));
+        }
+    } catch (_) {}
+}
+
+let currentSessionId = defaults.session_id || loadPersistedSessionId(defaults.user_id || 1) || null;
 
 function hydrateSessions() {
     sessionSelect.innerHTML = `<option value="">新建会话</option>`;
@@ -166,6 +187,10 @@ function hydrateDefaults() {
     tripIdInput.value = defaults.trip_id || "";
     useMemory.checked = defaults.use_memory !== false;
     topKInput.value = defaults.top_k_memory || 5;
+    const uid = parseInt(userIdInput.value, 10) || 1;
+    if (!defaults.session_id) {
+        currentSessionId = loadPersistedSessionId(uid);
+    }
     hydrateSessions();
 }
 
@@ -173,10 +198,19 @@ hydrateDefaults();
 
 sessionSelect.addEventListener("change", () => {
     currentSessionId = sessionSelect.value ? parseInt(sessionSelect.value, 10) : null;
+    const uid = parseInt(userIdInput.value, 10) || 1;
+    persistSessionId(uid, currentSessionId);
 });
 document.getElementById("newSessionBtn").addEventListener("click", () => {
     currentSessionId = null;
     sessionSelect.value = "";
+    const uid = parseInt(userIdInput.value, 10) || 1;
+    persistSessionId(uid, null);
+});
+userIdInput.addEventListener("change", () => {
+    const uid = parseInt(userIdInput.value, 10) || 1;
+    currentSessionId = loadPersistedSessionId(uid);
+    hydrateSessions();
 });
 
 sendBtn.addEventListener("click", runChat);
@@ -259,8 +293,9 @@ async function runChat() {
                     typewriter.append(evt.delta || "");
                 } else if (evt.event === "result") {
                     console.debug("SSE result", evt.payload?.ai_meta);
-                    renderDiagnostics(evt.payload);
+                    renderDiagnostics(evt.payload, evt.request_id);
                     currentSessionId = evt.payload.session_id;
+                    persistSessionId(payload.user_id, currentSessionId);
                     if (!sessionSelect.value && currentSessionId) {
                         const opt = document.createElement("option");
                         opt.value = currentSessionId;
@@ -271,13 +306,20 @@ async function runChat() {
                     statusText.textContent = "完成";
                 } else if (evt.event === "error") {
                     console.error("SSE error", evt);
-                    aiBubble.innerHTML = `<span class="text-red-500 text-sm">${evt.message || '出错了'}</span>`;
+                    const parts = [];
+                    parts.push(evt.message || "出错了");
+                    if (evt.error_type) parts.push(`type: ${evt.error_type}`);
+                    if (evt.request_id) parts.push(`request_id: ${evt.request_id}`);
+                    if (evt.ai_trace_id) parts.push(`ai_trace_id: ${evt.ai_trace_id}`);
+                    if (evt.sse_error_id) parts.push(`sse_error_id: ${evt.sse_error_id}`);
+                    if (evt.detail) parts.push(`detail: ${evt.detail}`);
+                    aiBubble.innerHTML = `<span class="text-red-500 text-sm whitespace-pre-wrap">${parts.join("\\n")}</span>`;
                     statusText.textContent = "错误";
                 }
             }
         }
     } catch (err) {
-        aiBubble.innerHTML = `<span class="text-red-500 text-sm">${err.message}</span>`;
+        aiBubble.innerHTML = `<span class="text-red-500 text-sm whitespace-pre-wrap">${err.message}</span>`;
         statusText.textContent = "失败";
         console.error("Chat request failed", err);
     } finally {
@@ -285,8 +327,9 @@ async function runChat() {
     }
 }
 
-function renderDiagnostics(payload) {
+function renderDiagnostics(payload, requestId) {
     const meta = payload.ai_meta || {};
+    document.getElementById("metaRequestId").textContent = requestId || "-";
     document.getElementById("metaTrace").textContent = meta.trace_id || "-";
     document.getElementById("metaModel").textContent = meta.model || "-";
     document.getElementById("metaLatency").textContent = meta.latency_ms ? `${meta.latency_ms.toFixed ? meta.latency_ms.toFixed(0) : meta.latency_ms} ms` : "-";
